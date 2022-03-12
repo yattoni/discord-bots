@@ -1,0 +1,3 @@
+#!/usr/bin/env zsh
+
+./package-quake-bot.sh && ./package-gas-bot.sh
