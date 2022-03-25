@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/yattoni/discord-bots/discord"
 	"github.com/yattoni/discord-bots/maps"
 	"github.com/yattoni/discord-bots/quake/usgs"
@@ -26,7 +27,7 @@ func runOnce() {
 			log.Printf("Sending message for %s %s with magnitude %f\n", feature.Properties.Type, feature.ID, feature.Properties.Mag)
 			webhook.SendMessage(feature.String())
 			webhook.SendMessage(mapUrl)
-		} else if feature.Properties.Mag >= 5.0 {
+		} else if feature.Properties.Mag >= 5.9 {
 			log.Printf("Sending message for earthquake %s with magnitude %f\n", feature.ID, feature.Properties.Mag)
 			webhook.SendMessage(feature.String())
 			webhook.SendMessage(mapUrl)
@@ -37,6 +38,6 @@ func runOnce() {
 }
 
 func main() {
-	runOnce()
-	// lambda.Start(runOnce)
+	// runOnce()
+	lambda.Start(runOnce)
 }
