@@ -1,0 +1,289 @@
+package yahoo
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"time"
+)
+
+const defaultBaseURL = "https://query1.finance.yahoo.com"
+
+// Client fetches quotes and intraday charts from Yahoo Finance.
+type Client struct {
+	httpClient *http.Client
+	baseURL    string
+}
+
+func NewClient() *Client {
+	return &Client{
+		httpClient: &http.Client{Timeout: 15 * time.Second},
+		baseURL:    defaultBaseURL,
+	}
+}
+
+// Quote is a day's worth of price action plus the latest quote.
+type Quote struct {
+	Symbol        string
+	ShortName     string
+	LongName      string
+	Currency      string
+	Price         float64
+	PreviousClose float64
+	Change        float64
+	ChangePercent float64
+	PriceHint     int
+	ExchangeTZ    string
+	Points        []Point
+	PreStart      time.Time
+	RegularStart  time.Time
+	RegularEnd    time.Time
+	PostEnd       time.Time
+	LastTradeTime time.Time
+}
+
+type Point struct {
+	Time  time.Time
+	Price float64
+}
+
+type chartResponse struct {
+	Chart struct {
+		Result []chartResult `json:"result"`
+		Error  *chartError   `json:"error"`
+	} `json:"chart"`
+}
+
+type chartError struct {
+	Code        string `json:"code"`
+	Description string `json:"description"`
+}
+
+type chartResult struct {
+	Meta       chartMeta `json:"meta"`
+	Timestamp  []int64   `json:"timestamp"`
+	Indicators struct {
+		Quote []struct {
+			Close []*float64 `json:"close"`
+		} `json:"quote"`
+	} `json:"indicators"`
+}
+
+type chartMeta struct {
+	Currency             string  `json:"currency"`
+	Symbol               string  `json:"symbol"`
+	ExchangeTimezoneName string  `json:"exchangeTimezoneName"`
+	RegularMarketPrice   float64 `json:"regularMarketPrice"`
+	ChartPreviousClose   float64 `json:"chartPreviousClose"`
+	PreviousClose        float64 `json:"previousClose"`
+	PriceHint            int     `json:"priceHint"`
+	ShortName            string  `json:"shortName"`
+	LongName             string  `json:"longName"`
+	FulldayPrice         float64 `json:"fulldayPrice"`
+	FulldayChange        float64 `json:"fulldayChange"`
+	FulldayChangePercent float64 `json:"fulldayChangePercent"`
+	CurrentTradingPeriod struct {
+		Pre     tradingPeriod `json:"pre"`
+		Regular tradingPeriod `json:"regular"`
+		Post    tradingPeriod `json:"post"`
+	} `json:"currentTradingPeriod"`
+}
+
+type tradingPeriod struct {
+	Timezone  string `json:"timezone"`
+	Start     int64  `json:"start"`
+	End       int64  `json:"end"`
+	GMTOffset int    `json:"gmtoffset"`
+}
+
+// FetchQuote loads the latest quote and 1-minute chart, including premarket and after hours.
+func (c *Client) FetchQuote(symbol string) (*Quote, error) {
+	raw, err := c.getChart(symbol, "1d")
+	if err != nil {
+		return nil, err
+	}
+	quote, err := parseChart(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(quote.Points) > 0 {
+		return quote, nil
+	}
+
+	// Weekends and holidays can return an empty 1d series; fall back to the last session in 5d.
+	raw, err = c.getChart(symbol, "5d")
+	if err != nil {
+		return nil, err
+	}
+	quote, err = parseChart(raw)
+	if err != nil {
+		return nil, err
+	}
+	quote.Points = lastSession(quote)
+	if len(quote.Points) == 0 {
+		return nil, fmt.Errorf("no chart data for %s", symbol)
+	}
+	return quote, nil
+}
+
+func (c *Client) getChart(symbol, rangeValue string) ([]byte, error) {
+	u, err := url.Parse(c.baseURL + "/v8/finance/chart/" + url.PathEscape(symbol))
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	q.Set("interval", "1m")
+	q.Set("range", rangeValue)
+	q.Set("includePrePost", "true")
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	// Yahoo Finance rejects requests without a browser-like User-Agent.
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; discord-stock-bot/1.0)")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("yahoo finance request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("ticker %s not found", symbol)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("yahoo finance returned %s", resp.Status)
+	}
+	return body, nil
+}
+
+func parseChart(body []byte) (*Quote, error) {
+	var parsed chartResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("decode yahoo finance response: %w", err)
+	}
+	if parsed.Chart.Error != nil {
+		return nil, fmt.Errorf("ticker not found: %s", parsed.Chart.Error.Description)
+	}
+	if len(parsed.Chart.Result) == 0 {
+		return nil, fmt.Errorf("ticker not found")
+	}
+
+	result := parsed.Chart.Result[0]
+	meta := result.Meta
+	prevClose := meta.PreviousClose
+	if prevClose == 0 {
+		prevClose = meta.ChartPreviousClose
+	}
+
+	var closes []*float64
+	if len(result.Indicators.Quote) > 0 {
+		closes = result.Indicators.Quote[0].Close
+	}
+
+	points := make([]Point, 0, len(result.Timestamp))
+	for i, ts := range result.Timestamp {
+		if i >= len(closes) || closes[i] == nil {
+			continue
+		}
+		price := *closes[i]
+		if price <= 0 {
+			continue
+		}
+		points = append(points, Point{
+			Time:  time.Unix(ts, 0).UTC(),
+			Price: price,
+		})
+	}
+
+	price := meta.FulldayPrice
+	if price == 0 {
+		price = meta.RegularMarketPrice
+	}
+	if price == 0 && len(points) > 0 {
+		price = points[len(points)-1].Price
+	}
+
+	change := meta.FulldayChange
+	changePct := meta.FulldayChangePercent
+	if price != 0 && prevClose != 0 && change == 0 && changePct == 0 && price != prevClose {
+		change = price - prevClose
+		changePct = (change / prevClose) * 100
+	}
+
+	hint := meta.PriceHint
+	if hint <= 0 {
+		hint = 2
+	}
+
+	name := meta.ShortName
+	if name == "" {
+		name = meta.LongName
+	}
+
+	quote := &Quote{
+		Symbol:        meta.Symbol,
+		ShortName:     name,
+		LongName:      meta.LongName,
+		Currency:      meta.Currency,
+		Price:         price,
+		PreviousClose: prevClose,
+		Change:        change,
+		ChangePercent: changePct,
+		PriceHint:     hint,
+		ExchangeTZ:    meta.ExchangeTimezoneName,
+		Points:        points,
+		PreStart:      time.Unix(meta.CurrentTradingPeriod.Pre.Start, 0).UTC(),
+		RegularStart:  time.Unix(meta.CurrentTradingPeriod.Regular.Start, 0).UTC(),
+		RegularEnd:    time.Unix(meta.CurrentTradingPeriod.Regular.End, 0).UTC(),
+		PostEnd:       time.Unix(meta.CurrentTradingPeriod.Post.End, 0).UTC(),
+	}
+	if len(points) > 0 {
+		quote.LastTradeTime = points[len(points)-1].Time
+	}
+	return quote, nil
+}
+
+func lastSession(quote *Quote) []Point {
+	if len(quote.Points) == 0 {
+		return nil
+	}
+	cutoff := quote.PreStart
+	if cutoff.IsZero() {
+		last := quote.Points[len(quote.Points)-1].Time
+		cutoff = time.Date(last.Year(), last.Month(), last.Day(), 0, 0, 0, 0, time.UTC)
+	}
+	filtered := make([]Point, 0, len(quote.Points))
+	for _, p := range quote.Points {
+		if !p.Time.Before(cutoff) {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered
+}
+
+// SessionLabel describes which part of the trading day the latest print belongs to.
+func (q *Quote) SessionLabel() string {
+	if q.LastTradeTime.IsZero() {
+		return "Last session"
+	}
+	t := q.LastTradeTime
+	switch {
+	case !q.RegularStart.IsZero() && t.Before(q.RegularStart):
+		return "Premarket"
+	case !q.RegularEnd.IsZero() && !t.Before(q.RegularEnd):
+		return "After hours"
+	default:
+		return "Market hours"
+	}
+}
