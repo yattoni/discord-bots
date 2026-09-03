@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -123,7 +124,7 @@ func (c *Client) FetchQuote(symbol string) (*Quote, error) {
 	}
 	quote.Points = lastSession(quote)
 	if len(quote.Points) == 0 {
-		return nil, fmt.Errorf("no chart data for %s", symbol)
+		return nil, fmt.Errorf("%w for %s", ErrNoData, symbol)
 	}
 	return quote, nil
 }
@@ -149,22 +150,33 @@ func (c *Client) getChart(symbol, rangeValue string) ([]byte, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("yahoo finance request failed: %w", err)
+		return nil, fmt.Errorf("%w: yahoo finance request failed: %w", ErrUnavailable, err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: read yahoo finance response: %w", ErrUnavailable, err)
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("ticker %s not found", symbol)
+		return nil, notFoundError(symbol, body)
+	}
+	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+		return nil, fmt.Errorf("%w: yahoo finance returned %s", ErrUnavailable, resp.Status)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("yahoo finance returned %s", resp.Status)
 	}
 	return body, nil
+}
+
+func notFoundError(symbol string, body []byte) error {
+	var parsed chartResponse
+	if err := json.Unmarshal(body, &parsed); err == nil && parsed.Chart.Error != nil && parsed.Chart.Error.Description != "" {
+		return fmt.Errorf("%w: %s", ErrNotFound, parsed.Chart.Error.Description)
+	}
+	return fmt.Errorf("%w: %s", ErrNotFound, symbol)
 }
 
 func parseChart(body []byte) (*Quote, error) {
@@ -173,10 +185,10 @@ func parseChart(body []byte) (*Quote, error) {
 		return nil, fmt.Errorf("decode yahoo finance response: %w", err)
 	}
 	if parsed.Chart.Error != nil {
-		return nil, fmt.Errorf("ticker not found: %s", parsed.Chart.Error.Description)
+		return nil, classifyChartError(parsed.Chart.Error)
 	}
 	if len(parsed.Chart.Result) == 0 {
-		return nil, fmt.Errorf("ticker not found")
+		return nil, ErrNotFound
 	}
 
 	result := parsed.Chart.Result[0]
@@ -252,6 +264,18 @@ func parseChart(body []byte) (*Quote, error) {
 		quote.LastTradeTime = points[len(points)-1].Time
 	}
 	return quote, nil
+}
+
+func classifyChartError(err *chartError) error {
+	code := strings.ToLower(err.Code)
+	desc := strings.ToLower(err.Description)
+	if strings.Contains(code, "not found") || strings.Contains(desc, "not found") || strings.Contains(desc, "delisted") {
+		if err.Description != "" {
+			return fmt.Errorf("%w: %s", ErrNotFound, err.Description)
+		}
+		return ErrNotFound
+	}
+	return fmt.Errorf("yahoo finance: %s: %s", err.Code, err.Description)
 }
 
 func lastSession(quote *Quote) []Point {

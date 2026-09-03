@@ -1,0 +1,37 @@
+package main
+
+import (
+	"regexp"
+	"strings"
+)
+
+var mentionPattern = regexp.MustCompile(`<@!?\d+>`)
+
+const helpMessage = `I watch for messages that are **only** a stock ticker and reply with a Yahoo Finance quote card.
+
+**How to use me**
+- Send a ticker by itself: ` + "`$NOW`" + `, ` + "`$AAPL`" + `, or ` + "`$BRK.B`" + `
+- I'll reply with the current price, today's dollar and percent change, and a 1-minute chart (premarket, regular hours, and after hours)
+- Tickers are 1–5 letters, with an optional share class like ` + "`$BRK.B`" + `
+- Extra text around the ticker is not allowed — the message must be just the ticker (whitespace is fine)
+- If I can't find a ticker I'll say so. If Yahoo is down or the card fails to send, I'll ask you to try again (or send a text quote)
+
+Mention me with ` + "`help`" + ` to see this again.`
+
+// IsHelpMention reports whether the message @mentions the bot and otherwise says "help".
+func IsHelpMention(botID, content string, mentionedUserIDs []string) bool {
+	if botID == "" || !mentionsBot(botID, content, mentionedUserIDs) {
+		return false
+	}
+	stripped := mentionPattern.ReplaceAllString(content, " ")
+	return strings.EqualFold(strings.TrimSpace(stripped), "help")
+}
+
+func mentionsBot(botID, content string, mentionedUserIDs []string) bool {
+	for _, id := range mentionedUserIDs {
+		if id == botID {
+			return true
+		}
+	}
+	return strings.Contains(content, "<@"+botID+">") || strings.Contains(content, "<@!"+botID+">")
+}
