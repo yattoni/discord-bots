@@ -125,10 +125,7 @@ func (b *stockBot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	quote, png, err := b.lookup(ticker)
 	if err != nil {
 		log.Printf("quote failed for %s: %v", ticker, err)
-		_, sendErr := s.ChannelMessageSendReply(m.ChannelID, fmt.Sprintf("Couldn't find a quote for `$%s`.", ticker), m.Reference())
-		if sendErr != nil {
-			log.Printf("failed to send error reply: %v", sendErr)
-		}
+		replyText(s, m, quoteErrorReply(ticker, err))
 		return
 	}
 
@@ -142,6 +139,13 @@ func (b *stockBot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	})
 	if err != nil {
 		log.Printf("failed to send quote image for %s: %v", ticker, err)
+		replyText(s, m, quoteImageFallback(quote))
+	}
+}
+
+func replyText(s *discordgo.Session, m *discordgo.MessageCreate, content string) {
+	if _, err := s.ChannelMessageSendReply(m.ChannelID, content, m.Reference()); err != nil {
+		log.Printf("failed to send reply: %v", err)
 	}
 }
 

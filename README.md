@@ -14,6 +14,8 @@ Tickers are 1–5 letters, with an optional share class (`$BRK.B`). The rest of 
 
 Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Messages the bot processes are written to its logs.
 
+Unknown or delisted tickers get a not-found reply. If Yahoo is down or the quote card can't be attached, the bot says so instead of pretending the ticker is missing, and falls back to a text quote when it already has the numbers.
+
 This bot has to stay connected to Discord's gateway (websocket). Incoming messages cannot be read with the webhook-only gas and quake bots.
 
 ### Discord setup

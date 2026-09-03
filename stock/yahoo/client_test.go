@@ -91,7 +91,70 @@ func TestFetchQuoteNotFound(t *testing.T) {
 	client.baseURL = server.URL
 	_, err := client.FetchQuote("ZZZZ")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "ZZZZ")
+	assert.ErrorIs(t, err, ErrNotFound)
+	assert.Contains(t, err.Error(), "No data found, symbol may be delisted")
+}
+
+func TestFetchQuoteUnavailable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("try again later"))
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.baseURL = server.URL
+	_, err := client.FetchQuote("NOW")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrUnavailable)
+	assert.NotErrorIs(t, err, ErrNotFound)
+}
+
+func TestFetchQuoteNoData(t *testing.T) {
+	empty := `{
+	  "chart": {
+	    "result": [{
+	      "meta": {
+	        "currency": "USD",
+	        "symbol": "NOW",
+	        "regularMarketPrice": 0,
+	        "previousClose": 10,
+	        "currentTradingPeriod": {
+	          "pre": {"start": 1000, "end": 2000},
+	          "regular": {"start": 2000, "end": 3000},
+	          "post": {"start": 3000, "end": 4000}
+	        }
+	      },
+	      "timestamp": [],
+	      "indicators": {"quote": [{"close": []}]}
+	    }],
+	    "error": null
+	  }
+	}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(empty))
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.baseURL = server.URL
+	_, err := client.FetchQuote("NOW")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNoData)
+}
+
+func TestParseChartNotFound(t *testing.T) {
+	_, err := parseChart([]byte(`{"chart":{"result":null,"error":{"code":"Not Found","description":"No data found, symbol may be delisted"}}}`))
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestParseChartOtherError(t *testing.T) {
+	_, err := parseChart([]byte(`{"chart":{"result":null,"error":{"code":"Unauthorized","description":"Invalid cookie"}}}`))
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrNotFound)
+	assert.Contains(t, err.Error(), "Invalid cookie")
 }
 
 func TestFetchQuoteLive(t *testing.T) {

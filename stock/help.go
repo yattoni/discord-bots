@@ -14,6 +14,7 @@ const helpMessage = `I watch for messages that are **only** a stock ticker and r
 - I'll reply with the current price, today's dollar and percent change, and a 1-minute chart (premarket, regular hours, and after hours)
 - Tickers are 1–5 letters, with an optional share class like ` + "`$BRK.B`" + `
 - Extra text around the ticker is not allowed — the message must be just the ticker (whitespace is fine)
+- If I can't find a ticker I'll say so. If Yahoo is down or the card fails to send, I'll ask you to try again (or send a text quote)
 
 Mention me with ` + "`help`" + ` to see this again.`
 
