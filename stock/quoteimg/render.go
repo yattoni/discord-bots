@@ -238,32 +238,45 @@ func drawChart(dc *gg.Context, quote *yahoo.Quote) error {
 		dc.SetDash()
 	}
 
-	// Session separators
-	dc.SetColor(gridColor)
-	dc.SetLineWidth(1)
-	if !quote.RegularStart.IsZero() {
-		x := xAt(quote.RegularStart)
-		dc.DrawLine(x, chartY, x, chartY+chartH)
-		dc.Stroke()
-	}
-	if !quote.RegularEnd.IsZero() {
-		x := xAt(quote.RegularEnd)
-		dc.DrawLine(x, chartY, x, chartY+chartH)
-		dc.Stroke()
-	}
-
 	loc := location(quote.ExchangeTZ)
 	dc.SetFontFace(labelFace)
 	dc.SetColor(textSecondary)
-	drawCentered(dc, "Pre", (xAt(sessionStart)+xAt(quote.RegularStart))/2, chartY+chartH+22)
-	drawCentered(dc, "Market", (xAt(quote.RegularStart)+xAt(quote.RegularEnd))/2, chartY+chartH+22)
-	drawCentered(dc, "After hours", (xAt(quote.RegularEnd)+xAt(sessionEnd))/2, chartY+chartH+22)
+	if quote.HasExtendedHours() {
+		dc.SetColor(gridColor)
+		dc.SetLineWidth(1)
+		if !quote.RegularStart.IsZero() {
+			x := xAt(quote.RegularStart)
+			dc.DrawLine(x, chartY, x, chartY+chartH)
+			dc.Stroke()
+		}
+		if !quote.RegularEnd.IsZero() {
+			x := xAt(quote.RegularEnd)
+			dc.DrawLine(x, chartY, x, chartY+chartH)
+			dc.Stroke()
+		}
 
-	if !quote.RegularStart.IsZero() {
-		drawCentered(dc, quote.RegularStart.In(loc).Format("3:04 PM"), xAt(quote.RegularStart), chartY+chartH+40)
-	}
-	if !quote.RegularEnd.IsZero() {
-		drawCentered(dc, quote.RegularEnd.In(loc).Format("3:04 PM"), xAt(quote.RegularEnd), chartY+chartH+40)
+		dc.SetColor(textSecondary)
+		drawCentered(dc, "Pre", (xAt(sessionStart)+xAt(quote.RegularStart))/2, chartY+chartH+22)
+		drawCentered(dc, "Market", (xAt(quote.RegularStart)+xAt(quote.RegularEnd))/2, chartY+chartH+22)
+		drawCentered(dc, "After hours", (xAt(quote.RegularEnd)+xAt(sessionEnd))/2, chartY+chartH+22)
+
+		if !quote.RegularStart.IsZero() {
+			drawCentered(dc, quote.RegularStart.In(loc).Format("3:04 PM"), xAt(quote.RegularStart), chartY+chartH+40)
+		}
+		if !quote.RegularEnd.IsZero() {
+			drawCentered(dc, quote.RegularEnd.In(loc).Format("3:04 PM"), xAt(quote.RegularEnd), chartY+chartH+40)
+		}
+	} else {
+		span := sessionEnd.Sub(sessionStart)
+		ticks := []time.Time{sessionStart}
+		if span > 0 {
+			ticks = append(ticks, sessionStart.Add(span/3), sessionStart.Add(2*span/3), sessionEnd)
+		} else {
+			ticks = append(ticks, sessionEnd)
+		}
+		for _, tick := range ticks {
+			drawCentered(dc, tick.In(loc).Format("3:04 PM MST"), xAt(tick), chartY+chartH+22)
+		}
 	}
 
 	// Price labels on the right

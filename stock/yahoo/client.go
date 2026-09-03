@@ -27,22 +27,23 @@ func NewClient() *Client {
 
 // Quote is a day's worth of price action plus the latest quote.
 type Quote struct {
-	Symbol        string
-	ShortName     string
-	LongName      string
-	Currency      string
-	Price         float64
-	PreviousClose float64
-	Change        float64
-	ChangePercent float64
-	PriceHint     int
-	ExchangeTZ    string
-	Points        []Point
-	PreStart      time.Time
-	RegularStart  time.Time
-	RegularEnd    time.Time
-	PostEnd       time.Time
-	LastTradeTime time.Time
+	Symbol         string
+	ShortName      string
+	LongName       string
+	Currency       string
+	Price          float64
+	PreviousClose  float64
+	Change         float64
+	ChangePercent  float64
+	PriceHint      int
+	ExchangeTZ     string
+	InstrumentType string
+	Points         []Point
+	PreStart       time.Time
+	RegularStart   time.Time
+	RegularEnd     time.Time
+	PostEnd        time.Time
+	LastTradeTime  time.Time
 }
 
 type Point struct {
@@ -82,6 +83,7 @@ type chartMeta struct {
 	PriceHint            int     `json:"priceHint"`
 	ShortName            string  `json:"shortName"`
 	LongName             string  `json:"longName"`
+	InstrumentType       string  `json:"instrumentType"`
 	FulldayPrice         float64 `json:"fulldayPrice"`
 	FulldayChange        float64 `json:"fulldayChange"`
 	FulldayChangePercent float64 `json:"fulldayChangePercent"`
@@ -244,21 +246,22 @@ func parseChart(body []byte) (*Quote, error) {
 	}
 
 	quote := &Quote{
-		Symbol:        meta.Symbol,
-		ShortName:     name,
-		LongName:      meta.LongName,
-		Currency:      meta.Currency,
-		Price:         price,
-		PreviousClose: prevClose,
-		Change:        change,
-		ChangePercent: changePct,
-		PriceHint:     hint,
-		ExchangeTZ:    meta.ExchangeTimezoneName,
-		Points:        points,
-		PreStart:      time.Unix(meta.CurrentTradingPeriod.Pre.Start, 0).UTC(),
-		RegularStart:  time.Unix(meta.CurrentTradingPeriod.Regular.Start, 0).UTC(),
-		RegularEnd:    time.Unix(meta.CurrentTradingPeriod.Regular.End, 0).UTC(),
-		PostEnd:       time.Unix(meta.CurrentTradingPeriod.Post.End, 0).UTC(),
+		Symbol:         meta.Symbol,
+		ShortName:      name,
+		LongName:       meta.LongName,
+		Currency:       meta.Currency,
+		Price:          price,
+		PreviousClose:  prevClose,
+		Change:         change,
+		ChangePercent:  changePct,
+		PriceHint:      hint,
+		ExchangeTZ:     meta.ExchangeTimezoneName,
+		InstrumentType: meta.InstrumentType,
+		Points:         points,
+		PreStart:       time.Unix(meta.CurrentTradingPeriod.Pre.Start, 0).UTC(),
+		RegularStart:   time.Unix(meta.CurrentTradingPeriod.Regular.Start, 0).UTC(),
+		RegularEnd:     time.Unix(meta.CurrentTradingPeriod.Regular.End, 0).UTC(),
+		PostEnd:        time.Unix(meta.CurrentTradingPeriod.Post.End, 0).UTC(),
 	}
 	if len(points) > 0 {
 		quote.LastTradeTime = points[len(points)-1].Time
@@ -296,16 +299,38 @@ func lastSession(quote *Quote) []Point {
 	return filtered
 }
 
+// IsCrypto reports whether Yahoo classified this quote as a cryptocurrency.
+func (q *Quote) IsCrypto() bool {
+	return strings.EqualFold(q.InstrumentType, "CRYPTOCURRENCY")
+}
+
+// HasExtendedHours reports whether the quote has distinct premarket and after-hours sessions.
+func (q *Quote) HasExtendedHours() bool {
+	if q.IsCrypto() {
+		return false
+	}
+	if q.PreStart.IsZero() || q.RegularStart.IsZero() || q.RegularEnd.IsZero() || q.PostEnd.IsZero() {
+		return false
+	}
+	return q.RegularStart.Sub(q.PreStart) > time.Minute && q.PostEnd.Sub(q.RegularEnd) > time.Minute
+}
+
 // SessionLabel describes which part of the trading day the latest print belongs to.
 func (q *Quote) SessionLabel() string {
 	if q.LastTradeTime.IsZero() {
 		return "Last session"
 	}
+	if q.IsCrypto() {
+		return "24h"
+	}
+	if !q.HasExtendedHours() {
+		return "Market hours"
+	}
 	t := q.LastTradeTime
 	switch {
-	case !q.RegularStart.IsZero() && t.Before(q.RegularStart):
+	case t.Before(q.RegularStart):
 		return "Premarket"
-	case !q.RegularEnd.IsZero() && !t.Before(q.RegularEnd):
+	case !t.Before(q.RegularEnd):
 		return "After hours"
 	default:
 		return "Market hours"

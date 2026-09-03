@@ -8,9 +8,11 @@ A websocket Discord bot that watches for messages that are only a ticker, like `
 
 - current price
 - today's dollar and percent change (green up / red down)
-- 1-minute chart covering premarket, regular hours, and after hours (green above the previous close, red below)
+- 1-minute chart covering premarket, regular hours, and after hours for stocks, or 24h for crypto (green above the previous close, red below)
 
-Tickers are 1–5 letters, with an optional share class (`$BRK.B`). The rest of the message must be empty aside from whitespace.
+Tickers are 1–5 letters, with an optional share class (`$BRK.B`) or crypto pair (`$BTC-USD`). The rest of the message must be empty aside from whitespace.
+
+Yahoo Finance lists Bitcoin spot as `BTC-USD`. `$BTC` is the Grayscale Bitcoin Mini Trust ETF, not the coin.
 
 Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Messages the bot processes are written to its logs.
 
