@@ -24,7 +24,8 @@ func TestParseTicker(t *testing.T) {
 		{name: "bitcoin spot", message: "$BTC-USD", ticker: "BTC-USD", ok: true},
 		{name: "ethereum lowercase", message: "$eth-usd", ticker: "ETH-USD", ok: true},
 		{name: "crypto pair whitespace", message: "  $SOL-USD  \n", ticker: "SOL-USD", ok: true},
-		{name: "grayscale etf still a ticker", message: "$BTC", ticker: "BTC", ok: true},
+		{name: "bitcoin alias", message: "$BTC", ticker: "BTC-USD", ok: true},
+		{name: "bitcoin alias lowercase", message: "$btc", ticker: "BTC-USD", ok: true},
 		{name: "mixed text", message: "buy $NOW please", ok: false},
 		{name: "too long", message: "$GOOGLX", ok: false},
 		{name: "crypto base too long", message: "$BITCOIN-USD", ok: false},
@@ -43,4 +44,12 @@ func TestParseTicker(t *testing.T) {
 			assert.Equal(t, tc.ticker, got)
 		})
 	}
+}
+
+func TestResolveTicker(t *testing.T) {
+	assert.Equal(t, "BTC-USD", ResolveTicker("BTC"))
+	assert.Equal(t, "BTC-USD", ResolveTicker("btc"))
+	assert.Equal(t, "BTC-USD", ResolveTicker("BTC-USD"))
+	assert.Equal(t, "NOW", ResolveTicker("now"))
+	assert.Equal(t, "ETH-USD", ResolveTicker("ETH-USD"))
 }

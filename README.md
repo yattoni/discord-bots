@@ -12,7 +12,7 @@ A websocket Discord bot that watches for messages that are only a ticker, like `
 
 Tickers are 1–5 letters, with an optional share class (`$BRK.B`) or crypto pair (`$BTC-USD`). The rest of the message must be empty aside from whitespace.
 
-Yahoo Finance lists Bitcoin spot as `BTC-USD`. `$BTC` is the Grayscale Bitcoin Mini Trust ETF, not the coin.
+`$BTC` is treated as Bitcoin spot (`BTC-USD`). Other crypto pairs use Yahoo's hyphenated names, like `$ETH-USD`.
 
 Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Messages the bot processes are written to its logs.
 
