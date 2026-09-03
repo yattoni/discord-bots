@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yattoni/discord-bots/stock/yahoo"
@@ -67,6 +68,23 @@ func TestFormatQuoteText(t *testing.T) {
 	assert.Contains(t, got, "$144.92")
 	assert.Contains(t, got, "+$8.20")
 	assert.Contains(t, got, "+6.00%")
+}
+
+func TestFormatQuoteTextCrypto(t *testing.T) {
+	got := formatQuoteText(&yahoo.Quote{
+		Symbol:         "BTC-USD",
+		ShortName:      "Bitcoin USD",
+		Currency:       "USD",
+		InstrumentType: "CRYPTOCURRENCY",
+		Price:          81500.25,
+		Change:         4190.08,
+		ChangePercent:  5.42,
+		PriceHint:      2,
+		LastTradeTime:  time.Unix(10800, 0).UTC(),
+	})
+	assert.Contains(t, got, "**BTC-USD** · Bitcoin USD")
+	assert.Contains(t, got, "$81500.25")
+	assert.Contains(t, got, "24h")
 }
 
 func TestQuoteImageFallback(t *testing.T) {

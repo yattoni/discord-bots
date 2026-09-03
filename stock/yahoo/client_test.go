@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ const sampleChart = `{
         "priceHint": 2,
         "shortName": "ServiceNow, Inc.",
         "longName": "ServiceNow, Inc.",
+        "instrumentType": "EQUITY",
         "fulldayPrice": 144.92,
         "fulldayChange": 8.20,
         "fulldayChangePercent": 6.00,
@@ -58,7 +60,56 @@ func TestParseChart(t *testing.T) {
 	assert.Equal(t, 144.92, quote.Points[2].Price)
 	assert.Equal(t, time.Unix(1000, 0).UTC(), quote.PreStart)
 	assert.Equal(t, time.Unix(2000, 0).UTC(), quote.RegularStart)
+	assert.Equal(t, "EQUITY", quote.InstrumentType)
+	assert.True(t, quote.HasExtendedHours())
+	assert.False(t, quote.IsCrypto())
 	assert.Equal(t, "After hours", quote.SessionLabel())
+}
+
+const sampleCryptoChart = `{
+  "chart": {
+    "result": [{
+      "meta": {
+        "currency": "USD",
+        "symbol": "BTC-USD",
+        "exchangeTimezoneName": "UTC",
+        "instrumentType": "CRYPTOCURRENCY",
+        "regularMarketPrice": 81500.25,
+        "chartPreviousClose": 77310.17,
+        "previousClose": 77310.17,
+        "priceHint": 2,
+        "shortName": "Bitcoin USD",
+        "longName": "Bitcoin USD",
+        "currentTradingPeriod": {
+          "pre": {"timezone": "UTC", "start": 1000, "end": 1000, "gmtoffset": 0},
+          "regular": {"timezone": "UTC", "start": 1000, "end": 86400, "gmtoffset": 0},
+          "post": {"timezone": "UTC", "start": 86400, "end": 86400, "gmtoffset": 0}
+        }
+      },
+      "timestamp": [3600, 7200, 10800],
+      "indicators": {
+        "quote": [{
+          "close": [78000.00, 80000.50, 81500.25]
+        }]
+      }
+    }],
+    "error": null
+  }
+}`
+
+func TestParseCryptoChart(t *testing.T) {
+	quote, err := parseChart([]byte(sampleCryptoChart))
+	require.NoError(t, err)
+	assert.Equal(t, "BTC-USD", quote.Symbol)
+	assert.Equal(t, "Bitcoin USD", quote.ShortName)
+	assert.Equal(t, "CRYPTOCURRENCY", quote.InstrumentType)
+	assert.True(t, quote.IsCrypto())
+	assert.False(t, quote.HasExtendedHours())
+	assert.Equal(t, 81500.25, quote.Price)
+	assert.Equal(t, 77310.17, quote.PreviousClose)
+	assert.InDelta(t, 4190.08, quote.Change, 0.01)
+	assert.Equal(t, 3, len(quote.Points))
+	assert.Equal(t, "24h", quote.SessionLabel())
 }
 
 func TestFetchQuoteUsesIncludePrePost(t *testing.T) {
@@ -78,6 +129,24 @@ func TestFetchQuoteUsesIncludePrePost(t *testing.T) {
 	assert.Contains(t, gotURL, "includePrePost=true")
 	assert.Contains(t, gotURL, "interval=1m")
 	assert.Contains(t, gotURL, "/v8/finance/chart/NOW")
+}
+
+func TestFetchQuoteCryptoPath(t *testing.T) {
+	var gotURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotURL = r.URL.String()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(sampleCryptoChart))
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.baseURL = server.URL
+	quote, err := client.FetchQuote("BTC-USD")
+	require.NoError(t, err)
+	assert.Equal(t, "BTC-USD", quote.Symbol)
+	assert.Contains(t, gotURL, "/v8/finance/chart/BTC-USD")
+	assert.True(t, quote.IsCrypto())
 }
 
 func TestFetchQuoteNotFound(t *testing.T) {
@@ -169,6 +238,19 @@ func TestFetchQuoteLive(t *testing.T) {
 	assert.False(t, quote.RegularStart.IsZero())
 	assert.False(t, quote.PreStart.IsZero())
 	assert.NotEmpty(t, quote.ShortName)
+}
+
+func TestFetchQuoteLiveCrypto(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := NewClient().FetchQuote("BTC-USD")
+	require.NoError(t, err)
+	assert.Equal(t, "BTC-USD", quote.Symbol)
+	assert.True(t, quote.IsCrypto())
+	assert.Greater(t, quote.Price, 0.0)
+	assert.Greater(t, len(quote.Points), 10)
+	assert.Contains(t, strings.ToLower(quote.ShortName), "bitcoin")
 }
 
 func TestLastSessionFiltersOlderDays(t *testing.T) {

@@ -127,11 +127,71 @@ func TestRenderPNGCrossesPreviousClose(t *testing.T) {
 	assert.True(t, hasColorNear(t, pngBytes, redColor))
 }
 
+func sampleCryptoQuote() *yahoo.Quote {
+	start := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	prev := 77000.0
+	points := []yahoo.Point{}
+	price := prev
+	for i := 0; i < 96; i++ {
+		price += 80
+		points = append(points, yahoo.Point{
+			Time:  start.Add(time.Duration(i) * 15 * time.Minute),
+			Price: price,
+		})
+	}
+	return &yahoo.Quote{
+		Symbol:         "BTC-USD",
+		ShortName:      "Bitcoin USD",
+		Currency:       "USD",
+		InstrumentType: "CRYPTOCURRENCY",
+		Price:          price,
+		PreviousClose:  prev,
+		Change:         price - prev,
+		ChangePercent:  ((price - prev) / prev) * 100,
+		PriceHint:      2,
+		ExchangeTZ:     "UTC",
+		Points:         points,
+		PreStart:       start,
+		RegularStart:   start,
+		RegularEnd:     end,
+		PostEnd:        end,
+		LastTradeTime:  points[len(points)-1].Time,
+	}
+}
+
+func TestRenderPNGCrypto(t *testing.T) {
+	quote := sampleCryptoQuote()
+	require.False(t, quote.HasExtendedHours())
+	assert.Equal(t, "24h", quote.SessionLabel())
+	pngBytes, err := RenderPNG(quote)
+	require.NoError(t, err)
+	cfg, err := DecodeSize(pngBytes)
+	require.NoError(t, err)
+	assert.Equal(t, width, cfg.Width)
+	assert.Equal(t, height, cfg.Height)
+	assert.True(t, hasColorNear(t, pngBytes, greenColor))
+}
+
 func TestRenderPNGLive(t *testing.T) {
 	if os.Getenv("SKIP_LIVE") != "" {
 		t.Skip("live Yahoo Finance test disabled")
 	}
 	quote, err := yahoo.NewClient().FetchQuote("NOW")
+	require.NoError(t, err)
+	pngBytes, err := RenderPNG(quote)
+	require.NoError(t, err)
+	cfg, err := DecodeSize(pngBytes)
+	require.NoError(t, err)
+	assert.Equal(t, width, cfg.Width)
+	assert.Equal(t, height, cfg.Height)
+}
+
+func TestRenderPNGLiveCrypto(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := yahoo.NewClient().FetchQuote("BTC-USD")
 	require.NoError(t, err)
 	pngBytes, err := RenderPNG(quote)
 	require.NoError(t, err)
