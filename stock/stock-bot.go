@@ -62,7 +62,7 @@ func main() {
 }
 
 func writePreview(client *yahoo.Client, ticker, path string) error {
-	quote, err := client.FetchQuote(strings.ToUpper(ticker))
+	quote, err := client.FetchQuote(ResolveTicker(ticker))
 	if err != nil {
 		return err
 	}
