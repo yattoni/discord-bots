@@ -65,11 +65,18 @@ docker run --rm -v "$PWD:/out" -u "$(id -u):$(id -g)" \
 
 ### AWS Lightsail
 
-**Container service** (managed, no VM to SSH into):
+**Container service** (managed, no VM to SSH into). Install AWS CLI v2, Docker, and [lightsailctl](https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-install-software.html), then:
 
-1. Create a service: `aws lightsail create-container-service --service-name stock-bot --power nano --scale 1`
-2. Build and push: `docker build --platform linux/amd64 -t stock-bot . && aws lightsail push-container-image --service-name stock-bot --label stock-bot --image stock-bot:latest`
-3. Deploy from the Lightsail console: add a container named `stock-bot`, image `:stock-bot.latest`, and environment variables `DISCORD_BOT_TOKEN` (required) and `DISCORD_CHANNEL_ID` (optional). Do **not** open a public endpoint — this bot only talks to Discord over the websocket gateway.
+```sh
+export DISCORD_BOT_TOKEN=your-bot-token
+# optional: only respond in one channel
+# export DISCORD_CHANNEL_ID=1234567890
+./scripts/deploy-stock-bot-lightsail.sh
+```
+
+The script creates a `nano` service named `stock-bot` in `us-west-2` if needed, builds `linux/amd64`, pushes the image, and deploys `DISCORD_BOT_TOKEN` (and optional `DISCORD_CHANNEL_ID`). It does **not** open a public endpoint — this bot only talks to Discord over the websocket gateway.
+
+Override defaults with `AWS_DEFAULT_REGION`, `LIGHTSAIL_SERVICE_NAME`, `LIGHTSAIL_POWER`, or `LIGHTSAIL_SCALE`.
 
 **Instance** (a small Linux VM with Docker):
 
