@@ -74,9 +74,17 @@ export DISCORD_BOT_TOKEN=your-bot-token
 ./scripts/deploy-stock-bot-lightsail.sh
 ```
 
-The script creates a `nano` service named `stock-bot` in `us-west-2` if needed, builds `linux/amd64`, pushes the image, and deploys `DISCORD_BOT_TOKEN` (and optional `DISCORD_CHANNEL_ID`). It does **not** open a public endpoint — this bot only talks to Discord over the websocket gateway.
+The script creates a `nano` service named `stock-bot` in `us-east-2` if needed, builds `linux/amd64`, pushes the image, and deploys `DISCORD_BOT_TOKEN` (and optional `DISCORD_CHANNEL_ID`). It does **not** open a public endpoint — this bot only talks to Discord over the websocket gateway.
 
-Override defaults with `AWS_DEFAULT_REGION`, `LIGHTSAIL_SERVICE_NAME`, `LIGHTSAIL_POWER`, or `LIGHTSAIL_SCALE`.
+Fetch container logs:
+
+```sh
+./scripts/stock-bot-lightsail-logs.sh
+./scripts/stock-bot-lightsail-logs.sh --filter ERROR
+./scripts/stock-bot-lightsail-logs.sh --follow
+```
+
+Override defaults with `LIGHTSAIL_REGION`, `LIGHTSAIL_SERVICE_NAME`, `LIGHTSAIL_POWER`, or `LIGHTSAIL_SCALE`. Region is `us-east-2` unless you set `LIGHTSAIL_REGION`; `AWS_DEFAULT_REGION` is ignored so a leftover CLI region cannot send the deploy elsewhere.
 
 **Instance** (a small Linux VM with Docker):
 

@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
 # Deploy the stock quote Discord bot to an AWS Lightsail container service.
 # Required: AWS credentials, Docker, AWS CLI v2, lightsailctl, DISCORD_BOT_TOKEN.
-# Optional: DISCORD_CHANNEL_ID, AWS_DEFAULT_REGION, LIGHTSAIL_SERVICE_NAME,
-#           LIGHTSAIL_POWER, LIGHTSAIL_SCALE.
+# Optional: DISCORD_CHANNEL_ID, LIGHTSAIL_REGION (default us-east-2),
+#           LIGHTSAIL_SERVICE_NAME, LIGHTSAIL_POWER, LIGHTSAIL_SCALE.
 set -euo pipefail
 
-SERVICE_NAME="${LIGHTSAIL_SERVICE_NAME:-stock-bot}"
-REGION="${AWS_DEFAULT_REGION:-us-west-2}"
-POWER="${LIGHTSAIL_POWER:-nano}"
-SCALE="${LIGHTSAIL_SCALE:-1}"
-IMAGE_LABEL="${LIGHTSAIL_IMAGE_LABEL:-stock-bot}"
-LOCAL_IMAGE="${LOCAL_IMAGE:-stock-bot:latest}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lightsail-stock-bot.env.sh
+source "$ROOT/scripts/lightsail-stock-bot.env.sh"
 
 if [[ -z "${DISCORD_BOT_TOKEN:-}" ]]; then
   echo "DISCORD_BOT_TOKEN is required" >&2
