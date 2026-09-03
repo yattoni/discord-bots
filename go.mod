@@ -8,7 +8,7 @@ require (
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/fogleman/gg v1.3.0
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/image v0.18.0
+	golang.org/x/image v0.45.0
 )
 
 require (
