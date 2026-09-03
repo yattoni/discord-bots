@@ -15,3 +15,7 @@
 # vendor/
 
 bin
+
+# Local Docker / Lightsail secrets and preview images
+.env
+*.png

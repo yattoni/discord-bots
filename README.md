@@ -37,3 +37,46 @@ Preview a quote image without Discord:
 ```sh
 go run ./stock -preview NOW -out now.png
 ```
+
+### Docker
+
+The image is a static linux/amd64 binary (what Lightsail expects). It needs `DISCORD_BOT_TOKEN`, and optionally `DISCORD_CHANNEL_ID` to limit replies to one channel.
+
+```sh
+docker build --platform linux/amd64 -t stock-bot .
+docker run -d --name stock-bot --restart unless-stopped \
+  -e DISCORD_BOT_TOKEN \
+  -e DISCORD_CHANNEL_ID \
+  stock-bot
+```
+
+Or with Compose (reads `DISCORD_BOT_TOKEN` from the environment or a local `.env` file):
+
+```sh
+docker compose up -d --build
+```
+
+Preview a card inside the container without Discord:
+
+```sh
+docker run --rm -v "$PWD:/out" -u "$(id -u):$(id -g)" \
+  stock-bot -preview NOW -out /out/now.png
+```
+
+### AWS Lightsail
+
+**Container service** (managed, no VM to SSH into):
+
+1. Create a service: `aws lightsail create-container-service --service-name stock-bot --power nano --scale 1`
+2. Build and push: `docker build --platform linux/amd64 -t stock-bot . && aws lightsail push-container-image --service-name stock-bot --label stock-bot --image stock-bot:latest`
+3. Deploy from the Lightsail console: add a container named `stock-bot`, image `:stock-bot.latest`, and environment variables `DISCORD_BOT_TOKEN` (required) and `DISCORD_CHANNEL_ID` (optional). Do **not** open a public endpoint — this bot only talks to Discord over the websocket gateway.
+
+**Instance** (a small Linux VM with Docker):
+
+```sh
+sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2
+sudo usermod -aG docker $USER   # log out and back in after this
+docker compose up -d --build
+```
+
+Keep the token in `/etc/environment` or a `.env` file next to `docker-compose.yml`. The compose file restarts the container unless you stop it.
