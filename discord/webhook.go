@@ -19,7 +19,7 @@ func NewWebhook(urlString string) *Webhook {
 		log.Fatal("Error parsing url: ", urlString, err)
 	}
 
-	session, err := discordgo.New()
+	session, err := discordgo.New("")
 	if err != nil {
 		log.Fatal("Error creating Discord session,", err)
 	}
