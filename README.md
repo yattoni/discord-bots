@@ -8,7 +8,7 @@ A websocket Discord bot that watches for messages that are only a ticker, like `
 
 - current price
 - today's dollar and percent change (green up / red down)
-- 1-minute chart covering premarket, regular hours, and after hours
+- 1-minute chart covering premarket, regular hours, and after hours (green above the previous close, red below)
 
 Tickers are 1–5 letters, with an optional share class (`$BRK.B`). The rest of the message must be empty aside from whitespace.
 

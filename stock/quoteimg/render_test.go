@@ -67,6 +67,66 @@ func TestRenderPNGDownDay(t *testing.T) {
 	assert.True(t, hasColorNear(t, pngBytes, redColor))
 }
 
+func TestSplitByPreviousClose(t *testing.T) {
+	start := time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC)
+	points := []yahoo.Point{
+		{Time: start, Price: 99},
+		{Time: start.Add(time.Minute), Price: 99.5},
+		{Time: start.Add(2 * time.Minute), Price: 101},
+		{Time: start.Add(3 * time.Minute), Price: 102},
+		{Time: start.Add(4 * time.Minute), Price: 99},
+	}
+	segs := splitByPreviousClose(points, 100)
+	require.Len(t, segs, 3)
+	assert.False(t, segs[0].above)
+	assert.Equal(t, 100.0, segs[0].points[len(segs[0].points)-1].Price)
+	assert.True(t, segs[1].above)
+	assert.Equal(t, 100.0, segs[1].points[0].Price)
+	assert.Equal(t, 100.0, segs[1].points[len(segs[1].points)-1].Price)
+	assert.False(t, segs[2].above)
+	assert.Equal(t, 100.0, segs[2].points[0].Price)
+	assert.Equal(t, 99.0, segs[2].points[len(segs[2].points)-1].Price)
+}
+
+func TestRenderPNGCrossesPreviousClose(t *testing.T) {
+	start := time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC)
+	regular := start.Add(5 * time.Hour)
+	regularEnd := regular.Add(6*time.Hour + 30*time.Minute)
+	postEnd := regularEnd.Add(4 * time.Hour)
+	points := make([]yahoo.Point, 0, 40)
+	for i := 0; i < 40; i++ {
+		price := 98.0
+		if i >= 10 && i <= 25 {
+			price = 103.0
+		}
+		points = append(points, yahoo.Point{
+			Time:  start.Add(time.Duration(i) * 20 * time.Minute),
+			Price: price,
+		})
+	}
+	quote := &yahoo.Quote{
+		Symbol:        "NFLX",
+		ShortName:     "Netflix, Inc.",
+		Currency:      "USD",
+		Price:         98,
+		PreviousClose: 100,
+		Change:        -2,
+		ChangePercent: -2,
+		PriceHint:     2,
+		ExchangeTZ:    "America/New_York",
+		Points:        points,
+		PreStart:      start,
+		RegularStart:  regular,
+		RegularEnd:    regularEnd,
+		PostEnd:       postEnd,
+		LastTradeTime: points[len(points)-1].Time,
+	}
+	pngBytes, err := RenderPNG(quote)
+	require.NoError(t, err)
+	assert.True(t, hasColorNear(t, pngBytes, greenColor))
+	assert.True(t, hasColorNear(t, pngBytes, redColor))
+}
+
 func TestRenderPNGLive(t *testing.T) {
 	if os.Getenv("SKIP_LIVE") != "" {
 		t.Skip("live Yahoo Finance test disabled")

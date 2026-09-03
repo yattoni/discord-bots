@@ -30,13 +30,16 @@ var (
 	textPrimary    = color.RGBA{R: 240, G: 242, B: 248, A: 255}
 	textSecondary  = color.RGBA{R: 156, G: 163, B: 180, A: 255}
 	gridColor      = color.RGBA{R: 55, G: 60, B: 74, A: 255}
-	preBand        = color.RGBA{R: 22, G: 24, B: 32, A: 255}
-	regularBand    = color.RGBA{R: 30, G: 34, B: 46, A: 255}
-	postBand       = color.RGBA{R: 22, G: 24, B: 32, A: 255}
+	chartBand      = color.RGBA{R: 22, G: 24, B: 32, A: 255}
 	greenColor     = color.RGBA{R: 34, G: 197, B: 94, A: 255}
 	redColor       = color.RGBA{R: 239, G: 68, B: 68, A: 255}
 	prevCloseColor = color.RGBA{R: 148, G: 163, B: 184, A: 180}
 )
+
+type chartSeg struct {
+	points []yahoo.Point
+	above  bool
+}
 
 func loadFace(name string, size float64) (font.Face, error) {
 	data, err := fontFS.ReadFile(name)
@@ -74,7 +77,7 @@ func RenderPNG(quote *yahoo.Quote) ([]byte, error) {
 	if err := drawHeader(dc, quote, accent, up); err != nil {
 		return nil, err
 	}
-	if err := drawChart(dc, quote, accent); err != nil {
+	if err := drawChart(dc, quote); err != nil {
 		return nil, err
 	}
 
@@ -149,7 +152,7 @@ func drawHeader(dc *gg.Context, quote *yahoo.Quote, accent color.Color, up bool)
 	return nil
 }
 
-func drawChart(dc *gg.Context, quote *yahoo.Quote, accent color.Color) error {
+func drawChart(dc *gg.Context, quote *yahoo.Quote) error {
 	labelFace, err := loadFace("fonts/LiberationSans-Regular.ttf", 13)
 	if err != nil {
 		return err
@@ -199,54 +202,40 @@ func drawChart(dc *gg.Context, quote *yahoo.Quote, accent color.Color) error {
 		return chartY + chartH - frac*chartH
 	}
 
-	// Session background bands
-	if !quote.RegularStart.IsZero() && !quote.RegularEnd.IsZero() {
-		drawBand(dc, xAt(sessionStart), chartY, xAt(quote.RegularStart)-xAt(sessionStart), chartH, preBand)
-		drawBand(dc, xAt(quote.RegularStart), chartY, xAt(quote.RegularEnd)-xAt(quote.RegularStart), chartH, regularBand)
-		drawBand(dc, xAt(quote.RegularEnd), chartY, xAt(sessionEnd)-xAt(quote.RegularEnd), chartH, postBand)
-	} else {
-		dc.SetColor(regularBand)
-		dc.DrawRectangle(chartX, chartY, chartW, chartH)
-		dc.Fill()
-	}
+	dc.SetColor(chartBand)
+	dc.DrawRectangle(chartX, chartY, chartW, chartH)
+	dc.Fill()
 
-	// Previous close reference
-	if quote.PreviousClose > 0 {
-		y := yAt(quote.PreviousClose)
-		dc.SetColor(prevCloseColor)
-		dc.SetDash(6, 5)
-		dc.SetLineWidth(1)
-		dc.DrawLine(chartX, y, chartX+chartW, y)
-		dc.Stroke()
-		dc.SetDash()
+	baseline := quote.PreviousClose
+	if baseline <= 0 && len(quote.Points) > 0 {
+		baseline = quote.Points[0].Price
+	}
+	baselineY := chartY + chartH
+	if baseline > 0 {
+		baselineY = yAt(baseline)
 	}
 
 	if len(quote.Points) >= 2 {
-		fill := accent.(color.RGBA)
-		dc.NewSubPath()
-		dc.MoveTo(xAt(quote.Points[0].Time), chartY+chartH)
-		for _, p := range quote.Points {
-			dc.LineTo(xAt(p.Time), yAt(p.Price))
+		for _, seg := range splitByPreviousClose(quote.Points, baseline) {
+			drawSegment(dc, seg, xAt, yAt, baselineY)
 		}
 		last := quote.Points[len(quote.Points)-1]
-		dc.LineTo(xAt(last.Time), chartY+chartH)
-		dc.ClosePath()
-		dc.SetColor(color.RGBA{R: fill.R, G: fill.G, B: fill.B, A: 90})
-		dc.Fill()
-
-		dc.SetColor(accent)
-		dc.SetLineWidth(2.4)
-		dc.SetLineCap(gg.LineCapRound)
-		dc.SetLineJoin(gg.LineJoinRound)
-		dc.MoveTo(xAt(quote.Points[0].Time), yAt(quote.Points[0].Price))
-		for _, p := range quote.Points[1:] {
-			dc.LineTo(xAt(p.Time), yAt(p.Price))
+		dot := redColor
+		if last.Price >= baseline {
+			dot = greenColor
 		}
-		dc.Stroke()
-
-		// Current price dot
+		dc.SetColor(dot)
 		dc.DrawCircle(xAt(last.Time), yAt(last.Price), 4.5)
 		dc.Fill()
+	}
+
+	if baseline > 0 {
+		dc.SetColor(prevCloseColor)
+		dc.SetDash(6, 5)
+		dc.SetLineWidth(1)
+		dc.DrawLine(chartX, baselineY, chartX+chartW, baselineY)
+		dc.Stroke()
+		dc.SetDash()
 	}
 
 	// Session separators
@@ -288,13 +277,80 @@ func drawChart(dc *gg.Context, quote *yahoo.Quote, accent color.Color) error {
 	return nil
 }
 
-func drawBand(dc *gg.Context, x, y, w, h float64, c color.Color) {
-	if w <= 0 {
+func drawSegment(dc *gg.Context, seg chartSeg, xAt func(time.Time) float64, yAt func(float64) float64, baselineY float64) {
+	if len(seg.points) < 2 {
 		return
 	}
-	dc.SetColor(c)
-	dc.DrawRectangle(x, y, w, h)
+	accent := redColor
+	if seg.above {
+		accent = greenColor
+	}
+
+	dc.NewSubPath()
+	dc.MoveTo(xAt(seg.points[0].Time), baselineY)
+	for _, p := range seg.points {
+		dc.LineTo(xAt(p.Time), yAt(p.Price))
+	}
+	last := seg.points[len(seg.points)-1]
+	dc.LineTo(xAt(last.Time), baselineY)
+	dc.ClosePath()
+	dc.SetRGBA255(int(accent.R), int(accent.G), int(accent.B), 70)
 	dc.Fill()
+
+	dc.SetColor(accent)
+	dc.SetLineWidth(2.4)
+	dc.SetLineCap(gg.LineCapRound)
+	dc.SetLineJoin(gg.LineJoinRound)
+	dc.MoveTo(xAt(seg.points[0].Time), yAt(seg.points[0].Price))
+	for _, p := range seg.points[1:] {
+		dc.LineTo(xAt(p.Time), yAt(p.Price))
+	}
+	dc.Stroke()
+}
+
+func splitByPreviousClose(points []yahoo.Point, prev float64) []chartSeg {
+	if len(points) == 0 {
+		return nil
+	}
+	above := func(price float64) bool { return price >= prev }
+
+	var segs []chartSeg
+	cur := chartSeg{above: above(points[0].Price), points: []yahoo.Point{points[0]}}
+	for i := 1; i < len(points); i++ {
+		prevPt := points[i-1]
+		pt := points[i]
+		isAbove := above(pt.Price)
+		if isAbove == cur.above {
+			cur.points = append(cur.points, pt)
+			continue
+		}
+		cross := interpolateCross(prevPt, pt, prev)
+		cur.points = append(cur.points, cross)
+		segs = append(segs, cur)
+		cur = chartSeg{above: isAbove, points: []yahoo.Point{cross, pt}}
+	}
+	if len(cur.points) > 0 {
+		segs = append(segs, cur)
+	}
+	return segs
+}
+
+func interpolateCross(a, b yahoo.Point, prev float64) yahoo.Point {
+	dy := b.Price - a.Price
+	if dy == 0 {
+		return yahoo.Point{Time: a.Time, Price: prev}
+	}
+	t := (prev - a.Price) / dy
+	if t < 0 {
+		t = 0
+	}
+	if t > 1 {
+		t = 1
+	}
+	return yahoo.Point{
+		Time:  a.Time.Add(time.Duration(float64(b.Time.Sub(a.Time)) * t)),
+		Price: prev,
+	}
 }
 
 func drawCentered(dc *gg.Context, text string, x, y float64) {
