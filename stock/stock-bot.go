@@ -54,7 +54,7 @@ func main() {
 	}
 	defer session.Close()
 
-	log.Println("Stock bot is listening for $TICKER messages")
+	log.Println("Stock bot is listening for $TICKER messages and @mention help")
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-stop
@@ -103,11 +103,25 @@ func (b *stockBot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	botID := ""
+	if s.State != nil && s.State.User != nil {
+		botID = s.State.User.ID
+	}
+
+	if IsHelpMention(botID, m.Content, userIDs(m.Mentions)) {
+		logProcessed(m, "help")
+		if _, err := s.ChannelMessageSendReply(m.ChannelID, helpMessage, m.Reference()); err != nil {
+			log.Printf("failed to send help reply: %v", err)
+		}
+		return
+	}
+
 	ticker, ok := ParseTicker(m.Content)
 	if !ok {
 		return
 	}
 
+	logProcessed(m, "$"+ticker)
 	quote, png, err := b.lookup(ticker)
 	if err != nil {
 		log.Printf("quote failed for %s: %v", ticker, err)
@@ -129,6 +143,24 @@ func (b *stockBot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if err != nil {
 		log.Printf("failed to send quote image for %s: %v", ticker, err)
 	}
+}
+
+func userIDs(users []*discordgo.User) []string {
+	ids := make([]string, 0, len(users))
+	for _, u := range users {
+		if u != nil && u.ID != "" {
+			ids = append(ids, u.ID)
+		}
+	}
+	return ids
+}
+
+func logProcessed(m *discordgo.MessageCreate, kind string) {
+	author := "unknown"
+	if m.Author != nil {
+		author = m.Author.Username
+	}
+	log.Printf("processed %s message from %s in channel %s: %q", kind, author, m.ChannelID, m.Content)
 }
 
 func (b *stockBot) lookup(ticker string) (*yahoo.Quote, []byte, error) {

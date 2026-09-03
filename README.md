@@ -12,6 +12,8 @@ A websocket Discord bot that watches for messages that are only a ticker, like `
 
 Tickers are 1–5 letters, with an optional share class (`$BRK.B`). The rest of the message must be empty aside from whitespace.
 
+Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Messages the bot processes are written to its logs.
+
 This bot has to stay connected to Discord's gateway (websocket). Incoming messages cannot be read with the webhook-only gas and quake bots.
 
 ### Discord setup
