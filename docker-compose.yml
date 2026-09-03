@@ -1,0 +1,10 @@
+services:
+  stock-bot:
+    build: .
+    image: stock-bot:latest
+    platform: linux/amd64
+    container_name: stock-bot
+    restart: unless-stopped
+    environment:
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:?set DISCORD_BOT_TOKEN}
+      DISCORD_CHANNEL_ID: ${DISCORD_CHANNEL_ID:-}
