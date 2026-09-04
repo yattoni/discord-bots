@@ -103,6 +103,17 @@ Fetch container logs:
 
 Override defaults with `LIGHTSAIL_REGION`, `LIGHTSAIL_SERVICE_NAME`, `LIGHTSAIL_POWER`, or `LIGHTSAIL_SCALE`. Region is `us-east-2` unless you set `LIGHTSAIL_REGION`; `AWS_DEFAULT_REGION` is ignored so a leftover CLI region cannot send the deploy elsewhere.
 
+The deploy and log scripts disable the AWS CLI pager (`AWS_PAGER=""`). AWS CLI v2 otherwise opens `less` on a TTY and exits 253 with `Unable to redirect output to pager` when `less` is not installed — which can happen after the Lightsail API call already succeeded.
+
+The deploy script also checks `docker info` before building. On machines without systemd (`systemctl` / `service docker` will not start the daemon), start it by hand and make the socket reachable:
+
+```sh
+sudo dockerd --host=unix:///var/run/docker.sock --iptables=false >/tmp/dockerd.log 2>&1 &
+sudo chmod 666 /var/run/docker.sock   # if this user is not in the docker group
+```
+
+If overlay storage fails in a nested VM, restart dockerd with `--storage-driver=vfs --data-root=/var/lib/docker-vfs`.
+
 **Instance** (a small Linux VM with Docker):
 
 ```sh

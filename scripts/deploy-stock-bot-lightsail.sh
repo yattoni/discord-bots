@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Deploy the stock quote Discord bot to an AWS Lightsail container service.
-# Required: AWS credentials, Docker, AWS CLI v2, lightsailctl, DISCORD_BOT_TOKEN.
+# Required: AWS credentials, Docker daemon, AWS CLI v2, lightsailctl, DISCORD_BOT_TOKEN.
 # Optional: DISCORD_CHANNEL_ID, OPENROUTER_API_KEY, LIGHTSAIL_REGION (default us-east-2),
 #           LIGHTSAIL_SERVICE_NAME, LIGHTSAIL_POWER, LIGHTSAIL_SCALE.
+# The shared env file clears AWS_PAGER so CLI v2 does not fail without `less`.
+# docker info is checked up front; see the README if dockerd is not running.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,6 +28,17 @@ need docker
 need jq
 if ! command -v lightsailctl >/dev/null 2>&1; then
   echo "missing lightsailctl (https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-install-software.html)" >&2
+  exit 1
+fi
+
+# `docker` on PATH is not enough: these VMs often have no systemd, so
+# `systemctl start docker` / `service docker start` do nothing.
+if ! docker info >/dev/null 2>&1; then
+  echo "docker daemon is not running (or this user cannot reach /var/run/docker.sock)" >&2
+  echo "On hosts without systemd, start dockerd yourself:" >&2
+  echo "  sudo dockerd --host=unix:///var/run/docker.sock --iptables=false >/tmp/dockerd.log 2>&1 &" >&2
+  echo "  sudo chmod 666 /var/run/docker.sock   # if you are not in the docker group" >&2
+  echo "If overlay storage fails in a nested VM, restart with --storage-driver=vfs --data-root=/var/lib/docker-vfs" >&2
   exit 1
 fi
 
