@@ -47,7 +47,7 @@ const sampleChart = `{
 }`
 
 func TestParseChart(t *testing.T) {
-	quote, err := parseChart([]byte(sampleChart))
+	quote, err := parseChart([]byte(sampleChart), RangeToday)
 	require.NoError(t, err)
 	assert.Equal(t, "NOW", quote.Symbol)
 	assert.Equal(t, "ServiceNow, Inc.", quote.ShortName)
@@ -98,7 +98,7 @@ const sampleCryptoChart = `{
 }`
 
 func TestParseCryptoChart(t *testing.T) {
-	quote, err := parseChart([]byte(sampleCryptoChart))
+	quote, err := parseChart([]byte(sampleCryptoChart), RangeToday)
 	require.NoError(t, err)
 	assert.Equal(t, "BTC-USD", quote.Symbol)
 	assert.Equal(t, "Bitcoin USD", quote.ShortName)
@@ -214,13 +214,13 @@ func TestFetchQuoteNoData(t *testing.T) {
 }
 
 func TestParseChartNotFound(t *testing.T) {
-	_, err := parseChart([]byte(`{"chart":{"result":null,"error":{"code":"Not Found","description":"No data found, symbol may be delisted"}}}`))
+	_, err := parseChart([]byte(`{"chart":{"result":null,"error":{"code":"Not Found","description":"No data found, symbol may be delisted"}}}`), RangeToday)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestParseChartOtherError(t *testing.T) {
-	_, err := parseChart([]byte(`{"chart":{"result":null,"error":{"code":"Unauthorized","description":"Invalid cookie"}}}`))
+	_, err := parseChart([]byte(`{"chart":{"result":null,"error":{"code":"Unauthorized","description":"Invalid cookie"}}}`), RangeToday)
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, ErrNotFound)
 	assert.Contains(t, err.Error(), "Invalid cookie")
@@ -251,6 +251,117 @@ func TestFetchQuoteLiveCrypto(t *testing.T) {
 	assert.Greater(t, quote.Price, 0.0)
 	assert.Greater(t, len(quote.Points), 10)
 	assert.Contains(t, strings.ToLower(quote.ShortName), "bitcoin")
+}
+
+func TestParseChartRangeUsesStartOfWindow(t *testing.T) {
+	quote, err := parseChart([]byte(sampleChart), RangeYTD)
+	require.NoError(t, err)
+	assert.Equal(t, RangeYTD, quote.Range)
+	assert.True(t, quote.MultiDay())
+	assert.False(t, quote.HasExtendedHours())
+	assert.Equal(t, "YTD", quote.SessionLabel())
+	assert.Equal(t, 136.72, quote.PreviousClose)
+	assert.InDelta(t, 8.20, quote.Change, 0.01)
+	assert.True(t, quote.PreStart.IsZero())
+	assert.True(t, quote.PostEnd.IsZero())
+}
+
+func TestParseChartRangeIgnoresTodayChange(t *testing.T) {
+	body := `{
+	  "chart": {
+	    "result": [{
+	      "meta": {
+	        "currency": "USD",
+	        "symbol": "NOW",
+	        "regularMarketPrice": 150,
+	        "chartPreviousClose": 100,
+	        "previousClose": 148,
+	        "fulldayPrice": 150,
+	        "fulldayChange": 2,
+	        "fulldayChangePercent": 1.35,
+	        "currentTradingPeriod": {
+	          "pre": {"start": 1000, "end": 2000},
+	          "regular": {"start": 2000, "end": 3000},
+	          "post": {"start": 3000, "end": 4000}
+	        }
+	      },
+	      "timestamp": [1000, 2000],
+	      "indicators": {"quote": [{"close": [110.0, 150.0]}]}
+	    }],
+	    "error": null
+	  }
+	}`
+	quote, err := parseChart([]byte(body), Range1Y)
+	require.NoError(t, err)
+	assert.Equal(t, 100.0, quote.PreviousClose)
+	assert.InDelta(t, 50.0, quote.Change, 0.01)
+	assert.InDelta(t, 50.0, quote.ChangePercent, 0.01)
+	assert.Equal(t, "1Y", quote.SessionLabel())
+}
+
+func TestFetchQuoteRangeUsesYahooWindow(t *testing.T) {
+	var gotURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotURL = r.URL.String()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(sampleChart))
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.baseURL = server.URL
+	quote, err := client.FetchQuoteRange("NOW", RangeYTD)
+	require.NoError(t, err)
+	assert.Equal(t, RangeYTD, quote.Range)
+	assert.Contains(t, gotURL, "range=ytd")
+	assert.Contains(t, gotURL, "interval=1d")
+	assert.NotContains(t, gotURL, "includePrePost=true")
+}
+
+func TestFetchQuoteRangeNoDataDoesNotFallBackToLastSession(t *testing.T) {
+	requests := 0
+	empty := `{
+	  "chart": {
+	    "result": [{
+	      "meta": {
+	        "currency": "USD",
+	        "symbol": "NOW",
+	        "regularMarketPrice": 0,
+	        "previousClose": 10
+	      },
+	      "timestamp": [],
+	      "indicators": {"quote": [{"close": []}]}
+	    }],
+	    "error": null
+	  }
+	}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(empty))
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.baseURL = server.URL
+	_, err := client.FetchQuoteRange("NOW", Range5D)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNoData)
+	assert.Equal(t, 1, requests)
+}
+
+func TestFetchQuoteLiveYTD(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := NewClient().FetchQuoteRange("NOW", RangeYTD)
+	require.NoError(t, err)
+	assert.Equal(t, "NOW", quote.Symbol)
+	assert.Equal(t, RangeYTD, quote.Range)
+	assert.Greater(t, quote.Price, 0.0)
+	assert.Greater(t, len(quote.Points), 10)
+	assert.True(t, quote.MultiDay())
+	assert.False(t, quote.HasExtendedHours())
 }
 
 func TestLastSessionFiltersOlderDays(t *testing.T) {

@@ -184,18 +184,10 @@ func drawChart(dc *gg.Context, quote *yahoo.Quote) error {
 	}
 
 	xAt := func(t time.Time) float64 {
-		total := sessionEnd.Sub(sessionStart).Seconds()
-		if total <= 0 {
-			return chartX
+		if quote.MultiDay() {
+			return pointIndexX(quote.Points, t, chartX, chartW)
 		}
-		frac := t.Sub(sessionStart).Seconds() / total
-		if frac < 0 {
-			frac = 0
-		}
-		if frac > 1 {
-			frac = 1
-		}
-		return chartX + frac*chartW
+		return calendarX(sessionStart, sessionEnd, t, chartX, chartW)
 	}
 	yAt := func(price float64) float64 {
 		frac := (price - minPrice) / priceSpan
@@ -266,6 +258,8 @@ func drawChart(dc *gg.Context, quote *yahoo.Quote) error {
 		if !quote.RegularEnd.IsZero() {
 			drawCentered(dc, quote.RegularEnd.In(loc).Format("3:04 PM"), xAt(quote.RegularEnd), chartY+chartH+40)
 		}
+	} else if quote.MultiDay() {
+		drawDateTicks(dc, quote.Points, loc, xAt, chartY+chartH+22)
 	} else {
 		span := sessionEnd.Sub(sessionStart)
 		ticks := []time.Time{sessionStart}
@@ -285,7 +279,11 @@ func drawChart(dc *gg.Context, quote *yahoo.Quote) error {
 	dc.DrawStringAnchored(formatNumber(minPrice, quote.PriceHint), chartX+chartW+10, chartY+chartH-2, 0, 0.5)
 	if quote.PreviousClose > 0 {
 		dc.SetColor(prevCloseColor)
-		dc.DrawStringAnchored("prev", chartX+chartW+10, yAt(quote.PreviousClose), 0, 0.5)
+		label := "prev"
+		if quote.MultiDay() {
+			label = "start"
+		}
+		dc.DrawStringAnchored(label, chartX+chartW+10, yAt(quote.PreviousClose), 0, 0.5)
 	}
 	return nil
 }
@@ -366,6 +364,81 @@ func interpolateCross(a, b yahoo.Point, prev float64) yahoo.Point {
 	}
 }
 
+func calendarX(start, end, t time.Time, chartX, chartW float64) float64 {
+	total := end.Sub(start).Seconds()
+	if total <= 0 {
+		return chartX
+	}
+	frac := t.Sub(start).Seconds() / total
+	if frac < 0 {
+		frac = 0
+	}
+	if frac > 1 {
+		frac = 1
+	}
+	return chartX + frac*chartW
+}
+
+// pointIndexX spaces each bar evenly so nights and weekends do not become long
+// straight lines on multi-day charts.
+func pointIndexX(points []yahoo.Point, t time.Time, chartX, chartW float64) float64 {
+	n := len(points)
+	if n == 0 {
+		return chartX
+	}
+	if n == 1 {
+		return chartX + chartW/2
+	}
+	if !t.After(points[0].Time) {
+		return chartX
+	}
+	last := n - 1
+	if !t.Before(points[last].Time) {
+		return chartX + chartW
+	}
+	for i := 1; i < n; i++ {
+		if t.Equal(points[i].Time) {
+			return chartX + float64(i)/float64(last)*chartW
+		}
+		if t.Before(points[i].Time) {
+			prev := points[i-1]
+			span := points[i].Time.Sub(prev.Time).Seconds()
+			frac := 0.0
+			if span > 0 {
+				frac = t.Sub(prev.Time).Seconds() / span
+			}
+			x0 := chartX + float64(i-1)/float64(last)*chartW
+			x1 := chartX + float64(i)/float64(last)*chartW
+			return x0 + frac*(x1-x0)
+		}
+	}
+	return chartX + chartW
+}
+
+func drawDateTicks(dc *gg.Context, points []yahoo.Point, loc *time.Location, xAt func(time.Time) float64, y float64) {
+	if len(points) == 0 {
+		return
+	}
+	n := len(points)
+	idxs := []int{0}
+	if n > 1 {
+		idxs = []int{0, n / 3, 2 * n / 3, n - 1}
+	}
+	span := points[n-1].Time.Sub(points[0].Time)
+	layout := "Jan 2"
+	if span >= 300*24*time.Hour {
+		layout = "Jan 2006"
+	}
+	seen := map[int]struct{}{}
+	for _, i := range idxs {
+		if _, ok := seen[i]; ok {
+			continue
+		}
+		seen[i] = struct{}{}
+		drawCentered(dc, points[i].Time.In(loc).Format(layout), xAt(points[i].Time), y)
+	}
+}
+
 func drawCentered(dc *gg.Context, text string, x, y float64) {
 	dc.DrawStringAnchored(text, x, y, 0.5, 0.5)
 }
@@ -408,8 +481,12 @@ func sessionCaption(quote *yahoo.Quote) string {
 	} else {
 		when = when.In(loc)
 	}
+	whenText := when.Format("Jan 2, 2006  3:04 PM MST")
+	if quote.MultiDay() {
+		whenText = when.Format("Jan 2, 2006")
+	}
 	return fmt.Sprintf("%s  ·  %s  ·  %s",
-		when.Format("Jan 2, 2006  3:04 PM MST"),
+		whenText,
 		quote.SessionLabel(),
 		sourceLabel(quote.Currency),
 	)

@@ -44,6 +44,7 @@ type Quote struct {
 	RegularEnd     time.Time
 	PostEnd        time.Time
 	LastTradeTime  time.Time
+	Range          Range
 }
 
 type Point struct {
@@ -103,24 +104,33 @@ type tradingPeriod struct {
 
 // FetchQuote loads the latest quote and 1-minute chart, including premarket and after hours.
 func (c *Client) FetchQuote(symbol string) (*Quote, error) {
-	raw, err := c.getChart(symbol, "1d")
+	return c.FetchQuoteRange(symbol, RangeToday)
+}
+
+// FetchQuoteRange loads a quote card for today's session or a simple multi-day window.
+func (c *Client) FetchQuoteRange(symbol string, rng Range) (*Quote, error) {
+	spec := rng.spec()
+	raw, err := c.getChart(symbol, spec)
 	if err != nil {
 		return nil, err
 	}
-	quote, err := parseChart(raw)
+	quote, err := parseChart(raw, rng)
 	if err != nil {
 		return nil, err
 	}
 	if len(quote.Points) > 0 {
 		return quote, nil
 	}
+	if rng != RangeToday {
+		return nil, fmt.Errorf("%w for %s", ErrNoData, symbol)
+	}
 
 	// Weekends and holidays can return an empty 1d series; fall back to the last session in 5d.
-	raw, err = c.getChart(symbol, "5d")
+	raw, err = c.getChart(symbol, chartSpec{rangeValue: "5d", interval: "1m", includePrePost: true})
 	if err != nil {
 		return nil, err
 	}
-	quote, err = parseChart(raw)
+	quote, err = parseChart(raw, RangeToday)
 	if err != nil {
 		return nil, err
 	}
@@ -131,15 +141,17 @@ func (c *Client) FetchQuote(symbol string) (*Quote, error) {
 	return quote, nil
 }
 
-func (c *Client) getChart(symbol, rangeValue string) ([]byte, error) {
+func (c *Client) getChart(symbol string, spec chartSpec) ([]byte, error) {
 	u, err := url.Parse(c.baseURL + "/v8/finance/chart/" + url.PathEscape(symbol))
 	if err != nil {
 		return nil, err
 	}
 	q := u.Query()
-	q.Set("interval", "1m")
-	q.Set("range", rangeValue)
-	q.Set("includePrePost", "true")
+	q.Set("interval", spec.interval)
+	q.Set("range", spec.rangeValue)
+	if spec.includePrePost {
+		q.Set("includePrePost", "true")
+	}
 	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
@@ -181,7 +193,7 @@ func notFoundError(symbol string, body []byte) error {
 	return fmt.Errorf("%w: %s", ErrNotFound, symbol)
 }
 
-func parseChart(body []byte) (*Quote, error) {
+func parseChart(body []byte, rng Range) (*Quote, error) {
 	var parsed chartResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, fmt.Errorf("decode yahoo finance response: %w", err)
@@ -230,7 +242,20 @@ func parseChart(body []byte) (*Quote, error) {
 
 	change := meta.FulldayChange
 	changePct := meta.FulldayChangePercent
-	if price != 0 && prevClose != 0 && change == 0 && changePct == 0 && price != prevClose {
+	if rng != RangeToday {
+		if meta.ChartPreviousClose != 0 {
+			prevClose = meta.ChartPreviousClose
+		} else if len(points) > 0 {
+			prevClose = points[0].Price
+		}
+		if price != 0 && prevClose != 0 {
+			change = price - prevClose
+			changePct = (change / prevClose) * 100
+		} else {
+			change = 0
+			changePct = 0
+		}
+	} else if price != 0 && prevClose != 0 && change == 0 && changePct == 0 && price != prevClose {
 		change = price - prevClose
 		changePct = (change / prevClose) * 100
 	}
@@ -258,10 +283,17 @@ func parseChart(body []byte) (*Quote, error) {
 		ExchangeTZ:     meta.ExchangeTimezoneName,
 		InstrumentType: meta.InstrumentType,
 		Points:         points,
+		Range:          rng,
 		PreStart:       time.Unix(meta.CurrentTradingPeriod.Pre.Start, 0).UTC(),
 		RegularStart:   time.Unix(meta.CurrentTradingPeriod.Regular.Start, 0).UTC(),
 		RegularEnd:     time.Unix(meta.CurrentTradingPeriod.Regular.End, 0).UTC(),
 		PostEnd:        time.Unix(meta.CurrentTradingPeriod.Post.End, 0).UTC(),
+	}
+	if rng != RangeToday {
+		quote.PreStart = time.Time{}
+		quote.RegularStart = time.Time{}
+		quote.RegularEnd = time.Time{}
+		quote.PostEnd = time.Time{}
 	}
 	if len(points) > 0 {
 		quote.LastTradeTime = points[len(points)-1].Time
@@ -304,8 +336,16 @@ func (q *Quote) IsCrypto() bool {
 	return strings.EqualFold(q.InstrumentType, "CRYPTOCURRENCY")
 }
 
+// MultiDay reports whether this quote covers a window longer than today's session.
+func (q *Quote) MultiDay() bool {
+	return q.Range != RangeToday
+}
+
 // HasExtendedHours reports whether the quote has distinct premarket and after-hours sessions.
 func (q *Quote) HasExtendedHours() bool {
+	if q.Range != RangeToday {
+		return false
+	}
 	if q.IsCrypto() {
 		return false
 	}
@@ -317,6 +357,9 @@ func (q *Quote) HasExtendedHours() bool {
 
 // SessionLabel describes which part of the trading day the latest print belongs to.
 func (q *Quote) SessionLabel() string {
+	if q.Range != RangeToday {
+		return string(q.Range)
+	}
 	if q.LastTradeTime.IsZero() {
 		return "Last session"
 	}
