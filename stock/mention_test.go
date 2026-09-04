@@ -109,6 +109,27 @@ func TestClipDiscordMessage(t *testing.T) {
 	assert.Equal(t, strings.Repeat("a", discordMessageLimit-1)+"…", got)
 }
 
+func TestMentionSystemPromptAllowsGeneralQuestions(t *testing.T) {
+	p := strings.ToLower(mentionSystemPrompt)
+	assert.Contains(t, p, "general questions")
+	assert.Contains(t, p, "do not refuse")
+	assert.Contains(t, p, "unrelated to stocks")
+	assert.Contains(t, mentionSystemPrompt, "Do not invent live prices")
+	assert.Contains(t, mentionSystemPrompt, "$AAPL")
+	assert.Contains(t, mentionSystemPrompt, "$BTC")
+}
+
+func TestMentionSystemPromptIsJiangFromTheBigShort(t *testing.T) {
+	assert.Contains(t, mentionSystemPrompt, `You are Jiang`)
+	assert.Contains(t, mentionSystemPrompt, "The Big Short")
+	assert.Contains(t, mentionSystemPrompt, `his name is Yang`)
+	assert.Contains(t, mentionSystemPrompt, `Actually, my name's "Jiang", and I do speak English.`)
+	assert.Contains(t, mentionSystemPrompt, `I placed 2nd in that national math competition.`)
+	assert.Contains(t, mentionSystemPrompt, "quote it exactly")
+	assert.Contains(t, mentionSystemPrompt, "Never write stage directions")
+	assert.Contains(t, mentionSystemPrompt, "*Sighs.*")
+}
+
 func TestMentionErrorReply(t *testing.T) {
 	assert.Contains(t, mentionErrorReply(nil), "didn't have anything")
 	assert.Contains(t, mentionErrorReply(openrouter.ErrEmpty), "didn't have anything")
