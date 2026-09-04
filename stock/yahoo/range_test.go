@@ -38,7 +38,7 @@ func TestParseRange(t *testing.T) {
 func TestRangeSpec(t *testing.T) {
 	assert.Equal(t, chartSpec{rangeValue: "1d", interval: "1m", includePrePost: true}, RangeToday.spec())
 	assert.Equal(t, chartSpec{rangeValue: "5d", interval: "15m"}, Range5D.spec())
-	assert.Equal(t, chartSpec{rangeValue: "1mo", interval: "1h"}, Range1M.spec())
+	assert.Equal(t, chartSpec{rangeValue: "1mo", interval: "15m"}, Range1M.spec())
 	assert.Equal(t, chartSpec{rangeValue: "3mo", interval: "1d"}, Range3M.spec())
 	assert.Equal(t, chartSpec{rangeValue: "6mo", interval: "1d"}, Range6M.spec())
 	assert.Equal(t, chartSpec{rangeValue: "1y", interval: "1d"}, Range1Y.spec())

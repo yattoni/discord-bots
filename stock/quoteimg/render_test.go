@@ -188,6 +188,24 @@ func sampleRangeQuote() *yahoo.Quote {
 	}
 }
 
+func TestPointIndexXSpacesHourlyBarsEvenly(t *testing.T) {
+	fridayClose := time.Date(2026, 9, 4, 20, 0, 0, 0, time.UTC)
+	mondayOpen := time.Date(2026, 9, 7, 13, 30, 0, 0, time.UTC)
+	points := []yahoo.Point{
+		{Time: fridayClose.Add(-time.Hour), Price: 100},
+		{Time: fridayClose, Price: 101},
+		{Time: mondayOpen, Price: 102},
+	}
+	const chartX, chartW = 0.0, 100.0
+
+	assert.InDelta(t, 0.0, pointIndexX(points, points[0].Time, chartX, chartW), 0.001)
+	assert.InDelta(t, 50.0, pointIndexX(points, fridayClose, chartX, chartW), 0.001)
+	assert.InDelta(t, 100.0, pointIndexX(points, mondayOpen, chartX, chartW), 0.001)
+
+	// Calendar time would park Friday's close near the left edge of a 65-hour weekend.
+	assert.InDelta(t, 1.5, calendarX(points[0].Time, mondayOpen, fridayClose, chartX, chartW), 0.2)
+}
+
 func TestRenderPNGRange(t *testing.T) {
 	quote := sampleRangeQuote()
 	require.True(t, quote.MultiDay())

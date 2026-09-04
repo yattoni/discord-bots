@@ -49,7 +49,8 @@ func (r Range) spec() chartSpec {
 	case Range5D:
 		return chartSpec{rangeValue: "5d", interval: "15m"}
 	case Range1M:
-		return chartSpec{rangeValue: "1mo", interval: "1h"}
+		// 15-minute bars keep enough texture once nights/weekends are dropped from the axis.
+		return chartSpec{rangeValue: "1mo", interval: "15m"}
 	case Range3M:
 		return chartSpec{rangeValue: "3mo", interval: "1d"}
 	case Range6M:
