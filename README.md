@@ -14,7 +14,7 @@ Tickers are 1–5 letters, with an optional share class (`$BRK.B`) or crypto pai
 
 `$BTC` is treated as Bitcoin spot (`BTC-USD`). Other crypto pairs use Yahoo's hyphenated names, like `$ETH-USD`.
 
-Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Mention it with any other question and it replies using MiniMax M3 (`minimax/minimax-m3:free`) through OpenRouter. Messages the bot processes are written to its logs.
+Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Mention it with any other question and it replies using Gemma 4 31B Instruct (`google/gemma-4-31b-it`) through OpenRouter. Messages the bot processes are written to its logs.
 
 Unknown or delisted tickers get a not-found reply. If Yahoo is down or the quote card can't be attached, the bot says so instead of pretending the ticker is missing, and falls back to a text quote when it already has the numbers.
 
@@ -46,7 +46,7 @@ Preview a quote image without Discord:
 go run ./stock -preview NOW -out now.png
 ```
 
-Ask MiniMax without Discord (needs `OPENROUTER_API_KEY`):
+Ask Gemma without Discord (needs `OPENROUTER_API_KEY`):
 
 ```sh
 go run ./stock -ask "What does a P/E ratio mean?"
@@ -102,6 +102,17 @@ Fetch container logs:
 ```
 
 Override defaults with `LIGHTSAIL_REGION`, `LIGHTSAIL_SERVICE_NAME`, `LIGHTSAIL_POWER`, or `LIGHTSAIL_SCALE`. Region is `us-east-2` unless you set `LIGHTSAIL_REGION`; `AWS_DEFAULT_REGION` is ignored so a leftover CLI region cannot send the deploy elsewhere.
+
+The deploy and log scripts disable the AWS CLI pager (`AWS_PAGER=""`). AWS CLI v2 otherwise opens `less` on a TTY and exits 253 with `Unable to redirect output to pager` when `less` is not installed — which can happen after the Lightsail API call already succeeded.
+
+The deploy script also checks `docker info` before building. On machines without systemd (`systemctl` / `service docker` will not start the daemon), start it by hand and make the socket reachable:
+
+```sh
+sudo dockerd --host=unix:///var/run/docker.sock --iptables=false >/tmp/dockerd.log 2>&1 &
+sudo chmod 666 /var/run/docker.sock   # if this user is not in the docker group
+```
+
+If overlay storage fails in a nested VM, restart dockerd with `--storage-driver=vfs --data-root=/var/lib/docker-vfs`.
 
 **Instance** (a small Linux VM with Docker):
 
