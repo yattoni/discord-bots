@@ -18,7 +18,7 @@ const helpMessage = `I watch for messages that are **only** a stock ticker and r
 - Extra text around the ticker is not allowed — the message must be just the ticker (whitespace is fine)
 - If I can't find a ticker I'll say so. If Yahoo is down or the card fails to send, I'll ask you to try again (or send a text quote)
 
-Mention me with ` + "`help`" + ` to see this again.`
+Mention me with a question and I'll reply. Mention me with ` + "`help`" + ` to see this again.`
 
 // IsHelpMention reports whether the message @mentions the bot and otherwise says "help".
 func IsHelpMention(botID, content string, mentionedUserIDs []string) bool {
