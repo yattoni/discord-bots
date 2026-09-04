@@ -87,6 +87,27 @@ func TestFormatQuoteTextCrypto(t *testing.T) {
 	assert.Contains(t, got, "24h")
 }
 
+func TestFormatQuoteTextRange(t *testing.T) {
+	got := formatQuoteText(&yahoo.Quote{
+		Symbol:        "NOW",
+		ShortName:     "ServiceNow, Inc.",
+		Currency:      "USD",
+		Price:         144.92,
+		Change:        20,
+		ChangePercent: 16,
+		PriceHint:     2,
+		Range:         yahoo.RangeYTD,
+	})
+	assert.Contains(t, got, "**NOW** · ServiceNow, Inc.")
+	assert.Contains(t, got, "+$20.00")
+	assert.Contains(t, got, "YTD")
+}
+
+func TestQuoteFileName(t *testing.T) {
+	assert.Equal(t, "NOW.png", quoteFileName(&yahoo.Quote{Symbol: "NOW"}))
+	assert.Equal(t, "NOW-YTD.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.RangeYTD}))
+}
+
 func TestQuoteImageFallback(t *testing.T) {
 	got := quoteImageFallback(&yahoo.Quote{Symbol: "AAPL", Price: 1, PriceHint: 2, Currency: "USD"})
 	assert.Contains(t, got, "couldn't attach the quote card")

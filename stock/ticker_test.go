@@ -4,13 +4,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/yattoni/discord-bots/stock/yahoo"
 )
 
-func TestParseTicker(t *testing.T) {
+func TestParseQuoteRequest(t *testing.T) {
 	cases := []struct {
 		name    string
 		message string
 		ticker  string
+		rng     yahoo.Range
 		ok      bool
 	}{
 		{name: "service now", message: "$NOW", ticker: "NOW", ok: true},
@@ -26,7 +28,16 @@ func TestParseTicker(t *testing.T) {
 		{name: "crypto pair whitespace", message: "  $SOL-USD  \n", ticker: "SOL-USD", ok: true},
 		{name: "bitcoin alias", message: "$BTC", ticker: "BTC-USD", ok: true},
 		{name: "bitcoin alias lowercase", message: "$btc", ticker: "BTC-USD", ok: true},
+		{name: "ytd range", message: "$NOW YTD", ticker: "NOW", rng: yahoo.RangeYTD, ok: true},
+		{name: "lowercase ytd", message: "$now ytd", ticker: "NOW", rng: yahoo.RangeYTD, ok: true},
+		{name: "mixed case range", message: "$AAPL 5d", ticker: "AAPL", rng: yahoo.Range5D, ok: true},
+		{name: "one month", message: "$F 1M", ticker: "F", rng: yahoo.Range1M, ok: true},
+		{name: "three months", message: "$BRK.B 3m", ticker: "BRK.B", rng: yahoo.Range3M, ok: true},
+		{name: "six months", message: "$BTC 6M", ticker: "BTC-USD", rng: yahoo.Range6M, ok: true},
+		{name: "one year extra space", message: "$ETH-USD   1y", ticker: "ETH-USD", rng: yahoo.Range1Y, ok: true},
 		{name: "mixed text", message: "buy $NOW please", ok: false},
+		{name: "unsupported range", message: "$NOW 2Y", ok: false},
+		{name: "range without space", message: "$NOWYTD", ok: false},
 		{name: "too long", message: "$GOOGLX", ok: false},
 		{name: "crypto base too long", message: "$BITCOIN-USD", ok: false},
 		{name: "trailing hyphen", message: "$BTC-", ok: false},
@@ -39,11 +50,32 @@ func TestParseTicker(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := ParseTicker(tc.message)
+			got, ok := ParseQuoteRequest(tc.message)
 			assert.Equal(t, tc.ok, ok)
-			assert.Equal(t, tc.ticker, got)
+			assert.Equal(t, tc.ticker, got.Ticker)
+			assert.Equal(t, tc.rng, got.Range)
 		})
 	}
+}
+
+func TestParsePreviewArg(t *testing.T) {
+	req, ok := parsePreviewArg("NOW YTD")
+	assert.True(t, ok)
+	assert.Equal(t, "NOW", req.Ticker)
+	assert.Equal(t, yahoo.RangeYTD, req.Range)
+
+	req, ok = parsePreviewArg("$btc 5d")
+	assert.True(t, ok)
+	assert.Equal(t, "BTC-USD", req.Ticker)
+	assert.Equal(t, yahoo.Range5D, req.Range)
+
+	req, ok = parsePreviewArg("AAPL")
+	assert.True(t, ok)
+	assert.Equal(t, "AAPL", req.Ticker)
+	assert.Equal(t, yahoo.RangeToday, req.Range)
+
+	_, ok = parsePreviewArg("NOW 2Y")
+	assert.False(t, ok)
 }
 
 func TestResolveTicker(t *testing.T) {
@@ -52,4 +84,10 @@ func TestResolveTicker(t *testing.T) {
 	assert.Equal(t, "BTC-USD", ResolveTicker("BTC-USD"))
 	assert.Equal(t, "NOW", ResolveTicker("now"))
 	assert.Equal(t, "ETH-USD", ResolveTicker("ETH-USD"))
+}
+
+func TestQuoteRequestCacheKey(t *testing.T) {
+	assert.Equal(t, "NOW", quoteRequest{Ticker: "NOW"}.cacheKey())
+	assert.Equal(t, "NOW:YTD", quoteRequest{Ticker: "NOW", Range: yahoo.RangeYTD}.cacheKey())
+	assert.Equal(t, "$NOW YTD", quoteRequest{Ticker: "NOW", Range: yahoo.RangeYTD}.logLabel())
 }

@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	preview := flag.String("preview", "", "fetch a ticker and write a quote PNG, then exit")
+	preview := flag.String("preview", "", "fetch a ticker (optionally with a range, e.g. NOW YTD) and write a quote PNG, then exit")
 	out := flag.String("out", "quote.png", "output path used with -preview")
 	ask := flag.String("ask", "", "send a prompt to Gemma via OpenRouter and print the reply")
 	flag.Parse()
@@ -99,8 +99,12 @@ func writeAsk(client *openrouter.Client, prompt string) error {
 	return nil
 }
 
-func writePreview(client *yahoo.Client, ticker, path string) error {
-	quote, err := client.FetchQuote(ResolveTicker(ticker))
+func writePreview(client *yahoo.Client, input, path string) error {
+	req, ok := parsePreviewArg(input)
+	if !ok {
+		return fmt.Errorf("invalid preview ticker %q (use NOW or NOW YTD)", input)
+	}
+	quote, err := client.FetchQuoteRange(req.Ticker, req.Range)
 	if err != nil {
 		return err
 	}
@@ -160,31 +164,38 @@ func (b *stockBot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	ticker, ok := ParseTicker(m.Content)
+	req, ok := ParseQuoteRequest(m.Content)
 	if !ok {
 		return
 	}
 
-	logProcessed(m, "$"+ticker)
-	quote, png, err := b.lookup(ticker)
+	logProcessed(m, req.logLabel())
+	quote, png, err := b.lookup(req)
 	if err != nil {
-		log.Printf("quote failed for %s: %v", ticker, err)
-		replyText(s, m, quoteErrorReply(ticker, err))
+		log.Printf("quote failed for %s: %v", req.logLabel(), err)
+		replyText(s, m, quoteErrorReply(req.Ticker, err))
 		return
 	}
 
 	_, err = s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 		Files: []*discordgo.File{{
-			Name:        fmt.Sprintf("%s.png", quote.Symbol),
+			Name:        quoteFileName(quote),
 			ContentType: "image/png",
 			Reader:      bytes.NewReader(png),
 		}},
 		Reference: m.Reference(),
 	})
 	if err != nil {
-		log.Printf("failed to send quote image for %s: %v", ticker, err)
+		log.Printf("failed to send quote image for %s: %v", req.logLabel(), err)
 		replyText(s, m, quoteImageFallback(quote))
 	}
+}
+
+func quoteFileName(quote *yahoo.Quote) string {
+	if quote.Range != yahoo.RangeToday {
+		return fmt.Sprintf("%s-%s.png", quote.Symbol, quote.Range)
+	}
+	return fmt.Sprintf("%s.png", quote.Symbol)
 }
 
 func (b *stockBot) replyToMention(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -238,18 +249,19 @@ func logProcessed(m *discordgo.MessageCreate, kind string) {
 	log.Printf("processed %s message from %s in channel %s: %q", kind, author, m.ChannelID, m.Content)
 }
 
-func (b *stockBot) lookup(ticker string) (*yahoo.Quote, []byte, error) {
+func (b *stockBot) lookup(req quoteRequest) (*yahoo.Quote, []byte, error) {
+	key := req.cacheKey()
 	b.mu.Lock()
 	if b.cache == nil {
 		b.cache = map[string]cachedQuote{}
 	}
-	if cached, ok := b.cache[ticker]; ok && time.Since(cached.fetched) < 20*time.Second {
+	if cached, ok := b.cache[key]; ok && time.Since(cached.fetched) < 20*time.Second {
 		b.mu.Unlock()
 		return cached.quote, cached.png, nil
 	}
 	b.mu.Unlock()
 
-	quote, err := b.yahoo.FetchQuote(ticker)
+	quote, err := b.yahoo.FetchQuoteRange(req.Ticker, req.Range)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -259,7 +271,7 @@ func (b *stockBot) lookup(ticker string) (*yahoo.Quote, []byte, error) {
 	}
 
 	b.mu.Lock()
-	b.cache[ticker] = cachedQuote{quote: quote, png: png, fetched: time.Now()}
+	b.cache[key] = cachedQuote{quote: quote, png: png, fetched: time.Now()}
 	b.mu.Unlock()
 	return quote, png, nil
 }

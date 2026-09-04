@@ -160,6 +160,48 @@ func sampleCryptoQuote() *yahoo.Quote {
 	}
 }
 
+func sampleRangeQuote() *yahoo.Quote {
+	start := time.Date(2026, 1, 2, 21, 0, 0, 0, time.UTC)
+	prev := 100.0
+	points := []yahoo.Point{}
+	price := prev
+	for i := 0; i < 40; i++ {
+		price += 0.8
+		points = append(points, yahoo.Point{
+			Time:  start.AddDate(0, 0, i*5),
+			Price: price,
+		})
+	}
+	return &yahoo.Quote{
+		Symbol:        "NOW",
+		ShortName:     "ServiceNow, Inc.",
+		Currency:      "USD",
+		Price:         price,
+		PreviousClose: prev,
+		Change:        price - prev,
+		ChangePercent: ((price - prev) / prev) * 100,
+		PriceHint:     2,
+		ExchangeTZ:    "America/New_York",
+		Points:        points,
+		LastTradeTime: points[len(points)-1].Time,
+		Range:         yahoo.RangeYTD,
+	}
+}
+
+func TestRenderPNGRange(t *testing.T) {
+	quote := sampleRangeQuote()
+	require.True(t, quote.MultiDay())
+	require.False(t, quote.HasExtendedHours())
+	assert.Equal(t, "YTD", quote.SessionLabel())
+	pngBytes, err := RenderPNG(quote)
+	require.NoError(t, err)
+	cfg, err := DecodeSize(pngBytes)
+	require.NoError(t, err)
+	assert.Equal(t, width, cfg.Width)
+	assert.Equal(t, height, cfg.Height)
+	assert.True(t, hasColorNear(t, pngBytes, greenColor))
+}
+
 func TestRenderPNGCrypto(t *testing.T) {
 	quote := sampleCryptoQuote()
 	require.False(t, quote.HasExtendedHours())
@@ -178,6 +220,20 @@ func TestRenderPNGLive(t *testing.T) {
 		t.Skip("live Yahoo Finance test disabled")
 	}
 	quote, err := yahoo.NewClient().FetchQuote("NOW")
+	require.NoError(t, err)
+	pngBytes, err := RenderPNG(quote)
+	require.NoError(t, err)
+	cfg, err := DecodeSize(pngBytes)
+	require.NoError(t, err)
+	assert.Equal(t, width, cfg.Width)
+	assert.Equal(t, height, cfg.Height)
+}
+
+func TestRenderPNGLiveYTD(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := yahoo.NewClient().FetchQuoteRange("NOW", yahoo.RangeYTD)
 	require.NoError(t, err)
 	pngBytes, err := RenderPNG(quote)
 	require.NoError(t, err)

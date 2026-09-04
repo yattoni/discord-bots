@@ -117,6 +117,7 @@ func TestMentionSystemPromptAllowsGeneralQuestions(t *testing.T) {
 	assert.Contains(t, mentionSystemPrompt, "Do not invent live prices")
 	assert.Contains(t, mentionSystemPrompt, "$AAPL")
 	assert.Contains(t, mentionSystemPrompt, "$BTC")
+	assert.Contains(t, mentionSystemPrompt, "$AAPL YTD")
 }
 
 func TestMentionSystemPromptIsJiangFromTheBigShort(t *testing.T) {

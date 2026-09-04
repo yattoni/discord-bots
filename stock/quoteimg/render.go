@@ -266,6 +266,8 @@ func drawChart(dc *gg.Context, quote *yahoo.Quote) error {
 		if !quote.RegularEnd.IsZero() {
 			drawCentered(dc, quote.RegularEnd.In(loc).Format("3:04 PM"), xAt(quote.RegularEnd), chartY+chartH+40)
 		}
+	} else if quote.MultiDay() {
+		drawDateTicks(dc, sessionStart, sessionEnd, loc, xAt, chartY+chartH+22)
 	} else {
 		span := sessionEnd.Sub(sessionStart)
 		ticks := []time.Time{sessionStart}
@@ -285,7 +287,11 @@ func drawChart(dc *gg.Context, quote *yahoo.Quote) error {
 	dc.DrawStringAnchored(formatNumber(minPrice, quote.PriceHint), chartX+chartW+10, chartY+chartH-2, 0, 0.5)
 	if quote.PreviousClose > 0 {
 		dc.SetColor(prevCloseColor)
-		dc.DrawStringAnchored("prev", chartX+chartW+10, yAt(quote.PreviousClose), 0, 0.5)
+		label := "prev"
+		if quote.MultiDay() {
+			label = "start"
+		}
+		dc.DrawStringAnchored(label, chartX+chartW+10, yAt(quote.PreviousClose), 0, 0.5)
 	}
 	return nil
 }
@@ -366,6 +372,23 @@ func interpolateCross(a, b yahoo.Point, prev float64) yahoo.Point {
 	}
 }
 
+func drawDateTicks(dc *gg.Context, start, end time.Time, loc *time.Location, xAt func(time.Time) float64, y float64) {
+	span := end.Sub(start)
+	ticks := []time.Time{start}
+	if span > 0 {
+		ticks = append(ticks, start.Add(span/3), start.Add(2*span/3), end)
+	} else {
+		ticks = append(ticks, end)
+	}
+	layout := "Jan 2"
+	if span >= 300*24*time.Hour {
+		layout = "Jan 2006"
+	}
+	for _, tick := range ticks {
+		drawCentered(dc, tick.In(loc).Format(layout), xAt(tick), y)
+	}
+}
+
 func drawCentered(dc *gg.Context, text string, x, y float64) {
 	dc.DrawStringAnchored(text, x, y, 0.5, 0.5)
 }
@@ -408,8 +431,12 @@ func sessionCaption(quote *yahoo.Quote) string {
 	} else {
 		when = when.In(loc)
 	}
+	whenText := when.Format("Jan 2, 2006  3:04 PM MST")
+	if quote.MultiDay() {
+		whenText = when.Format("Jan 2, 2006")
+	}
 	return fmt.Sprintf("%s  ·  %s  ·  %s",
-		when.Format("Jan 2, 2006  3:04 PM MST"),
+		whenText,
 		quote.SessionLabel(),
 		sourceLabel(quote.Currency),
 	)

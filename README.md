@@ -4,13 +4,13 @@ Discord bots that fetch and post earthquakes, gas prices, and stock quotes.
 
 ## Stock quote bot
 
-A websocket Discord bot that watches for messages that are only a ticker, like `$NOW`, then replies with a Yahoo Finance quote card:
+A websocket Discord bot that watches for messages that are only a ticker, like `$NOW` or `$NOW YTD`, then replies with a Yahoo Finance quote card:
 
 - current price
-- today's dollar and percent change (green up / red down)
-- 1-minute chart covering premarket, regular hours, and after hours for stocks, or 24h for crypto (green above the previous close, red below)
+- dollar and percent change for today, or over the requested range (green up / red down)
+- chart of today's session or the requested range (green above the baseline, red below)
 
-Tickers are 1–5 letters, with an optional share class (`$BRK.B`) or crypto pair (`$BTC-USD`). The rest of the message must be empty aside from whitespace.
+Tickers are 1–5 letters, with an optional share class (`$BRK.B`) or crypto pair (`$BTC-USD`). Optionally add a range after the ticker: `5D`, `1M`, `3M`, `6M`, `1Y`, or `YTD` (case insensitive). `$NOW` still shows today's session. The rest of the message must be empty aside from whitespace.
 
 `$BTC` is treated as Bitcoin spot (`BTC-USD`). Other crypto pairs use Yahoo's hyphenated names, like `$ETH-USD`.
 
@@ -44,6 +44,7 @@ Preview a quote image without Discord:
 
 ```sh
 go run ./stock -preview NOW -out now.png
+go run ./stock -preview "NOW YTD" -out now-ytd.png
 ```
 
 Ask Gemma without Discord (needs `OPENROUTER_API_KEY`):

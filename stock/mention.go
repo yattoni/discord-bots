@@ -30,7 +30,7 @@ Reply helpfully and concisely in Discord markdown (bold, italics, inline code). 
 
 Answer general questions, including ones unrelated to stocks, markets, or this bot. Do not refuse a question just because it is off-topic. You can still explain tickers, markets, and how this bot works.
 
-Do not invent live prices, charts, or news — tell people to send a ticker by itself (like $AAPL or $BTC) for a quote card. If they only mentioned you, greet them briefly in character and say they can ask a question or send a ticker.`
+Do not invent live prices, charts, or news — tell people to send a ticker by itself (like $AAPL or $BTC), optionally with a range like $AAPL YTD, for a quote card. If they only mentioned you, greet them briefly in character and say they can ask a question or send a ticker.`
 )
 
 // MentionsBot reports whether the message @mentions the bot.
