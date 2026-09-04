@@ -14,8 +14,8 @@ import (
 
 const (
 	defaultBaseURL = "https://openrouter.ai/api/v1"
-	// DefaultModel is Gemma 4 31B Instruct on OpenRouter's free tier.
-	DefaultModel = "google/gemma-4-31b-it:free"
+	// DefaultModel is Gemma 4 31B Instruct on OpenRouter.
+	DefaultModel = "google/gemma-4-31b-it"
 )
 
 var (
