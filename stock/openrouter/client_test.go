@@ -25,7 +25,7 @@ func TestCompleteSuccess(t *testing.T) {
 		require.NoError(t, json.Unmarshal(raw, &gotBody))
 		gotModel = gotBody.Model
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"  Hello from MiniMax  "}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"  Hello from Gemma  "}}]}`))
 	}))
 	defer srv.Close()
 
@@ -35,7 +35,7 @@ func TestCompleteSuccess(t *testing.T) {
 
 	got, err := client.Complete(context.Background(), "be brief", "hi")
 	require.NoError(t, err)
-	assert.Equal(t, "Hello from MiniMax", got)
+	assert.Equal(t, "Hello from Gemma", got)
 	assert.Equal(t, "Bearer test-key", gotAuth)
 	assert.Equal(t, "discord-stock-bot", gotTitle)
 	assert.Equal(t, DefaultModel, gotModel)

@@ -14,7 +14,7 @@ Tickers are 1–5 letters, with an optional share class (`$BRK.B`) or crypto pai
 
 `$BTC` is treated as Bitcoin spot (`BTC-USD`). Other crypto pairs use Yahoo's hyphenated names, like `$ETH-USD`.
 
-Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Mention it with any other question and it replies using MiniMax M3 (`minimax/minimax-m3:free`) through OpenRouter. Messages the bot processes are written to its logs.
+Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Mention it with any other question and it replies using Gemma 4 31B Instruct (`google/gemma-4-31b-it:free`) through OpenRouter. Messages the bot processes are written to its logs.
 
 Unknown or delisted tickers get a not-found reply. If Yahoo is down or the quote card can't be attached, the bot says so instead of pretending the ticker is missing, and falls back to a text quote when it already has the numbers.
 
@@ -46,7 +46,7 @@ Preview a quote image without Discord:
 go run ./stock -preview NOW -out now.png
 ```
 
-Ask MiniMax without Discord (needs `OPENROUTER_API_KEY`):
+Ask Gemma without Discord (needs `OPENROUTER_API_KEY`):
 
 ```sh
 go run ./stock -ask "What does a P/E ratio mean?"

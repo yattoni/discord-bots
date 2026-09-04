@@ -22,7 +22,7 @@ import (
 func main() {
 	preview := flag.String("preview", "", "fetch a ticker and write a quote PNG, then exit")
 	out := flag.String("out", "quote.png", "output path used with -preview")
-	ask := flag.String("ask", "", "send a prompt to MiniMax via OpenRouter and print the reply")
+	ask := flag.String("ask", "", "send a prompt to Gemma via OpenRouter and print the reply")
 	flag.Parse()
 
 	client := yahoo.NewClient()
