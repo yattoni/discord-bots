@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the stock quote Discord bot to an AWS Lightsail container service.
 # Required: AWS credentials, Docker, AWS CLI v2, lightsailctl, DISCORD_BOT_TOKEN.
-# Optional: DISCORD_CHANNEL_ID, LIGHTSAIL_REGION (default us-east-2),
+# Optional: DISCORD_CHANNEL_ID, OPENROUTER_API_KEY, LIGHTSAIL_REGION (default us-east-2),
 #           LIGHTSAIL_SERVICE_NAME, LIGHTSAIL_POWER, LIGHTSAIL_SCALE.
 set -euo pipefail
 
@@ -95,41 +95,26 @@ deploy_json="$(mktemp)"
 trap 'rm -f "$deploy_json"' EXIT
 chmod 600 "$deploy_json"
 
-if [[ -n "${DISCORD_CHANNEL_ID:-}" ]]; then
-  jq -n \
-    --arg service "$SERVICE_NAME" \
-    --arg image "$image" \
-    --arg token "$DISCORD_BOT_TOKEN" \
-    --arg channel "$DISCORD_CHANNEL_ID" \
-    '{
-      serviceName: $service,
-      containers: {
-        "stock-bot": {
-          image: $image,
-          environment: {
-            DISCORD_BOT_TOKEN: $token,
-            DISCORD_CHANNEL_ID: $channel
-          }
-        }
+jq -n \
+  --arg service "$SERVICE_NAME" \
+  --arg image "$image" \
+  --arg token "$DISCORD_BOT_TOKEN" \
+  --arg channel "${DISCORD_CHANNEL_ID:-}" \
+  --arg openrouter "${OPENROUTER_API_KEY:-}" \
+  '
+  def env:
+    {DISCORD_BOT_TOKEN: $token}
+    + (if $channel != "" then {DISCORD_CHANNEL_ID: $channel} else {} end)
+    + (if $openrouter != "" then {OPENROUTER_API_KEY: $openrouter} else {} end);
+  {
+    serviceName: $service,
+    containers: {
+      "stock-bot": {
+        image: $image,
+        environment: env
       }
-    }' > "$deploy_json"
-else
-  jq -n \
-    --arg service "$SERVICE_NAME" \
-    --arg image "$image" \
-    --arg token "$DISCORD_BOT_TOKEN" \
-    '{
-      serviceName: $service,
-      containers: {
-        "stock-bot": {
-          image: $image,
-          environment: {
-            DISCORD_BOT_TOKEN: $token
-          }
-        }
-      }
-    }' > "$deploy_json"
-fi
+    }
+  }' > "$deploy_json"
 
 echo "creating deployment (no public endpoint)"
 aws lightsail create-container-service-deployment \

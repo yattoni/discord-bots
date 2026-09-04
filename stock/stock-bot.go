@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/yattoni/discord-bots/stock/openrouter"
 	"github.com/yattoni/discord-bots/stock/quoteimg"
 	"github.com/yattoni/discord-bots/stock/yahoo"
 )
@@ -20,6 +22,7 @@ import (
 func main() {
 	preview := flag.String("preview", "", "fetch a ticker and write a quote PNG, then exit")
 	out := flag.String("out", "quote.png", "output path used with -preview")
+	ask := flag.String("ask", "", "send a prompt to MiniMax via OpenRouter and print the reply")
 	flag.Parse()
 
 	client := yahoo.NewClient()
@@ -31,9 +34,17 @@ func main() {
 		return
 	}
 
+	router := newOpenRouterFromEnv()
+	if *ask != "" {
+		if err := writeAsk(router, *ask); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	token := os.Getenv("DISCORD_BOT_TOKEN")
 	if token == "" {
-		log.Fatal("DISCORD_BOT_TOKEN is required (or pass -preview TICKER to render a quote image)")
+		log.Fatal("DISCORD_BOT_TOKEN is required (or pass -preview TICKER / -ask PROMPT)")
 	}
 
 	session, err := discordgo.New("Bot " + token)
@@ -42,9 +53,10 @@ func main() {
 	}
 
 	bot := &stockBot{
-		session:   session,
-		yahoo:     client,
-		channelID: strings.TrimSpace(os.Getenv("DISCORD_CHANNEL_ID")),
+		session:    session,
+		yahoo:      client,
+		openrouter: router,
+		channelID:  strings.TrimSpace(os.Getenv("DISCORD_CHANNEL_ID")),
 	}
 	session.AddHandler(bot.onMessage)
 	session.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentMessageContent | discordgo.IntentsDirectMessages
@@ -54,11 +66,37 @@ func main() {
 	}
 	defer session.Close()
 
-	log.Println("Stock bot is listening for $TICKER messages and @mention help")
+	if router != nil {
+		log.Println("Stock bot is listening for $TICKER messages, @mention help, and @mention chat")
+	} else {
+		log.Println("Stock bot is listening for $TICKER messages and @mention help (set OPENROUTER_API_KEY for @mention chat)")
+	}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-stop
 	log.Println("Shutting down")
+}
+
+func newOpenRouterFromEnv() *openrouter.Client {
+	key := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
+	if key == "" {
+		return nil
+	}
+	return openrouter.NewClient(key)
+}
+
+func writeAsk(client *openrouter.Client, prompt string) error {
+	if client == nil {
+		return fmt.Errorf("OPENROUTER_API_KEY is required with -ask")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	reply, err := client.Complete(ctx, mentionSystemPrompt, prompt)
+	if err != nil {
+		return err
+	}
+	fmt.Println(reply)
+	return nil
 }
 
 func writePreview(client *yahoo.Client, ticker, path string) error {
@@ -78,9 +116,10 @@ func writePreview(client *yahoo.Client, ticker, path string) error {
 }
 
 type stockBot struct {
-	session   *discordgo.Session
-	yahoo     *yahoo.Client
-	channelID string
+	session    *discordgo.Session
+	yahoo      *yahoo.Client
+	openrouter *openrouter.Client
+	channelID  string
 
 	mu    sync.Mutex
 	cache map[string]cachedQuote
@@ -116,6 +155,11 @@ func (b *stockBot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	if MentionsBot(botID, m.Content, userIDs(m.Mentions)) {
+		go b.replyToMention(s, m)
+		return
+	}
+
 	ticker, ok := ParseTicker(m.Content)
 	if !ok {
 		return
@@ -141,6 +185,33 @@ func (b *stockBot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		log.Printf("failed to send quote image for %s: %v", ticker, err)
 		replyText(s, m, quoteImageFallback(quote))
 	}
+}
+
+func (b *stockBot) replyToMention(s *discordgo.Session, m *discordgo.MessageCreate) {
+	logProcessed(m, "mention")
+	if b.openrouter == nil {
+		replyText(s, m, mentionErrorReply(openrouter.ErrUnauthorized))
+		return
+	}
+
+	prompt := MentionPrompt(m.Content)
+	if prompt == "" {
+		prompt = "The user mentioned you without additional text."
+	}
+
+	if err := s.ChannelTyping(m.ChannelID); err != nil {
+		log.Printf("failed to send typing indicator: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	reply, err := b.openrouter.Complete(ctx, mentionSystemPrompt, prompt)
+	if err != nil {
+		log.Printf("mention chat failed: %v", err)
+		replyText(s, m, mentionErrorReply(err))
+		return
+	}
+	replyText(s, m, clipDiscordMessage(reply))
 }
 
 func replyText(s *discordgo.Session, m *discordgo.MessageCreate, content string) {

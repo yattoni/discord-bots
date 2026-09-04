@@ -119,5 +119,6 @@ func TestHelpMessageDocumentsBitcoinSpot(t *testing.T) {
 	assert.Contains(t, helpMessage, "$BTC-USD")
 	assert.Contains(t, helpMessage, "Bitcoin spot")
 	assert.Contains(t, helpMessage, "$ETH-USD")
+	assert.Contains(t, helpMessage, "Mention me with a question")
 	assert.NotContains(t, helpMessage, "Grayscale")
 }

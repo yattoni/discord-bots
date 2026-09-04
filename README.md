@@ -14,7 +14,7 @@ Tickers are 1–5 letters, with an optional share class (`$BRK.B`) or crypto pai
 
 `$BTC` is treated as Bitcoin spot (`BTC-USD`). Other crypto pairs use Yahoo's hyphenated names, like `$ETH-USD`.
 
-Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Messages the bot processes are written to its logs.
+Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Mention it with any other question and it replies using MiniMax M3 (`minimax/minimax-m3:free`) through OpenRouter. Messages the bot processes are written to its logs.
 
 Unknown or delisted tickers get a not-found reply. If Yahoo is down or the quote card can't be attached, the bot says so instead of pretending the ticker is missing, and falls back to a text quote when it already has the numbers.
 
@@ -35,6 +35,8 @@ This bot has to stay connected to Discord's gateway (websocket). Incoming messag
 export DISCORD_BOT_TOKEN=your-bot-token
 # optional: only respond in one channel
 # export DISCORD_CHANNEL_ID=1234567890
+# optional: required for @mention chat replies
+# export OPENROUTER_API_KEY=your-openrouter-key
 go run ./stock
 ```
 
@@ -44,19 +46,26 @@ Preview a quote image without Discord:
 go run ./stock -preview NOW -out now.png
 ```
 
+Ask MiniMax without Discord (needs `OPENROUTER_API_KEY`):
+
+```sh
+go run ./stock -ask "What does a P/E ratio mean?"
+```
+
 ### Docker
 
-The image is a static linux/amd64 binary (what Lightsail expects). It needs `DISCORD_BOT_TOKEN`, and optionally `DISCORD_CHANNEL_ID` to limit replies to one channel.
+The image is a static linux/amd64 binary (what Lightsail expects). It needs `DISCORD_BOT_TOKEN`, and optionally `DISCORD_CHANNEL_ID` to limit replies to one channel and `OPENROUTER_API_KEY` for @mention chat.
 
 ```sh
 docker build --platform linux/amd64 -t stock-bot .
 docker run -d --name stock-bot --restart unless-stopped \
   -e DISCORD_BOT_TOKEN \
   -e DISCORD_CHANNEL_ID \
+  -e OPENROUTER_API_KEY \
   stock-bot
 ```
 
-Or with Compose (reads `DISCORD_BOT_TOKEN` from the environment or a local `.env` file):
+Or with Compose (reads `DISCORD_BOT_TOKEN` and optional `OPENROUTER_API_KEY` from the environment or a local `.env` file):
 
 ```sh
 docker compose up -d --build
@@ -77,10 +86,12 @@ docker run --rm -v "$PWD:/out" -u "$(id -u):$(id -g)" \
 export DISCORD_BOT_TOKEN=your-bot-token
 # optional: only respond in one channel
 # export DISCORD_CHANNEL_ID=1234567890
+# optional: required for @mention chat replies
+# export OPENROUTER_API_KEY=your-openrouter-key
 ./scripts/deploy-stock-bot-lightsail.sh
 ```
 
-The script creates a `nano` service named `stock-bot` in `us-east-2` if needed, builds `linux/amd64`, pushes the image, and deploys `DISCORD_BOT_TOKEN` (and optional `DISCORD_CHANNEL_ID`). It does **not** open a public endpoint — this bot only talks to Discord over the websocket gateway.
+The script creates a `nano` service named `stock-bot` in `us-east-2` if needed, builds `linux/amd64`, pushes the image, and deploys `DISCORD_BOT_TOKEN` (plus optional `DISCORD_CHANNEL_ID` and `OPENROUTER_API_KEY`). It does **not** open a public endpoint — this bot only talks to Discord over the websocket gateway.
 
 Fetch container logs:
 

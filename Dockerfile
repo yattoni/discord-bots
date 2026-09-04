@@ -1,7 +1,7 @@
 # Stock quote Discord bot. Build for Lightsail (linux/amd64):
 #   docker build --platform linux/amd64 -t stock-bot .
 # Run:
-#   docker run --rm -e DISCORD_BOT_TOKEN -e DISCORD_CHANNEL_ID stock-bot
+#   docker run --rm -e DISCORD_BOT_TOKEN -e DISCORD_CHANNEL_ID -e OPENROUTER_API_KEY stock-bot
 FROM golang:1.27-bookworm AS builder
 
 ARG TARGETOS=linux
