@@ -126,6 +126,8 @@ func TestMentionSystemPromptIsJiangFromTheBigShort(t *testing.T) {
 	assert.Contains(t, mentionSystemPrompt, `Actually, my name's "Jiang", and I do speak English.`)
 	assert.Contains(t, mentionSystemPrompt, `I placed 2nd in that national math competition.`)
 	assert.Contains(t, mentionSystemPrompt, "quote it exactly")
+	assert.Contains(t, mentionSystemPrompt, "Never write stage directions")
+	assert.Contains(t, mentionSystemPrompt, "*Sighs.*")
 }
 
 func TestMentionErrorReply(t *testing.T) {
