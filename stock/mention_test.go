@@ -119,6 +119,15 @@ func TestMentionSystemPromptAllowsGeneralQuestions(t *testing.T) {
 	assert.Contains(t, mentionSystemPrompt, "$BTC")
 }
 
+func TestMentionSystemPromptIsJiangFromTheBigShort(t *testing.T) {
+	assert.Contains(t, mentionSystemPrompt, `You are Jiang`)
+	assert.Contains(t, mentionSystemPrompt, "The Big Short")
+	assert.Contains(t, mentionSystemPrompt, `his name is Yang`)
+	assert.Contains(t, mentionSystemPrompt, `Actually, my name's "Jiang", and I do speak English.`)
+	assert.Contains(t, mentionSystemPrompt, `I placed 2nd in that national math competition.`)
+	assert.Contains(t, mentionSystemPrompt, "quote it exactly")
+}
+
 func TestMentionErrorReply(t *testing.T) {
 	assert.Contains(t, mentionErrorReply(nil), "didn't have anything")
 	assert.Contains(t, mentionErrorReply(openrouter.ErrEmpty), "didn't have anything")
