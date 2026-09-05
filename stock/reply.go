@@ -68,6 +68,14 @@ func formatMoneyText(amount float64, currency string, hint int) string {
 	}
 }
 
+func unknownRangeReply(ticker, extra string) string {
+	shown := strings.ReplaceAll(extra, "`", "'")
+	if shown == "" {
+		shown = extra
+	}
+	return fmt.Sprintf("I don't recognize `%s` as a time range. Valid ranges are %s — for example `$%s YTD`. Leave the range off for today's session.", shown, quoteRangeOptions, ticker)
+}
+
 func quoteImageFallback(quote *yahoo.Quote) string {
 	return fmt.Sprintf("I fetched `$%s` but couldn't attach the quote card. Here's the latest:\n%s", quote.Symbol, formatQuoteText(quote))
 }

@@ -103,6 +103,19 @@ func TestFormatQuoteTextRange(t *testing.T) {
 	assert.Contains(t, got, "YTD")
 }
 
+func TestUnknownRangeReply(t *testing.T) {
+	got := unknownRangeReply("NOW", "2Y")
+	assert.Contains(t, got, "I don't recognize `2Y`")
+	assert.Contains(t, got, "`5D`")
+	assert.Contains(t, got, "`1M`")
+	assert.Contains(t, got, "`3M`")
+	assert.Contains(t, got, "`6M`")
+	assert.Contains(t, got, "`1Y`")
+	assert.Contains(t, got, "`YTD`")
+	assert.Contains(t, got, "`$NOW YTD`")
+	assert.Contains(t, got, "today's session")
+}
+
 func TestQuoteFileName(t *testing.T) {
 	assert.Equal(t, "NOW.png", quoteFileName(&yahoo.Quote{Symbol: "NOW"}))
 	assert.Equal(t, "NOW-YTD.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.RangeYTD}))

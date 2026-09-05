@@ -7,10 +7,12 @@ import (
 	"github.com/yattoni/discord-bots/stock/yahoo"
 )
 
-// quoteRequestPattern matches a message that is only a $TICKER, optionally followed by a range.
+// tickerPrefixPattern matches a message that starts with $TICKER, with optional leftover text.
 // US common stocks are 1-5 letters; a single-letter share class (e.g. BRK.B) is allowed.
 // Yahoo crypto pairs use a hyphenated quote currency (e.g. BTC-USD for Bitcoin spot).
-var quoteRequestPattern = regexp.MustCompile(`(?i)^\$([A-Z]{1,5}(?:\.[A-Z]|-[A-Z]{1,4})?)(?:\s+(5D|1M|3M|6M|1Y|YTD))?$`)
+var tickerPrefixPattern = regexp.MustCompile(`(?i)^\$([A-Z]{1,5}(?:\.[A-Z]|-[A-Z]{1,4})?)(?:\s+(.*))?$`)
+
+const quoteRangeOptions = "`5D`, `1M`, `3M`, `6M`, `1Y`, or `YTD`"
 
 // tickerAliases maps shorthand symbols to the Yahoo Finance quote we actually fetch.
 // $BTC is Bitcoin spot, not the Grayscale Mini Trust ETF that Yahoo lists as BTC.
@@ -46,16 +48,39 @@ func ResolveTicker(ticker string) string {
 	return upper
 }
 
+func parseTickerPrefix(message string) (ticker, rest string, ok bool) {
+	trimmed := strings.TrimSpace(message)
+	matches := tickerPrefixPattern.FindStringSubmatch(trimmed)
+	if matches == nil {
+		return "", "", false
+	}
+	return ResolveTicker(matches[1]), strings.TrimSpace(matches[2]), true
+}
+
 // ParseQuoteRequest returns the ticker and optional range from a message like "$NOW" or "$NOW YTD".
 // The message may have leading/trailing whitespace, but no other text.
 func ParseQuoteRequest(message string) (quoteRequest, bool) {
-	trimmed := strings.TrimSpace(message)
-	matches := quoteRequestPattern.FindStringSubmatch(trimmed)
-	if matches == nil {
+	ticker, rest, ok := parseTickerPrefix(message)
+	if !ok {
 		return quoteRequest{}, false
 	}
-	rng, _ := yahoo.ParseRange(matches[2])
-	return quoteRequest{Ticker: ResolveTicker(matches[1]), Range: rng}, true
+	rng, valid := yahoo.ParseRange(rest)
+	if !valid {
+		return quoteRequest{}, false
+	}
+	return quoteRequest{Ticker: ticker, Range: rng}, true
+}
+
+// unknownRangeAfterTicker reports leftover text after a ticker that is not a known range.
+func unknownRangeAfterTicker(message string) (ticker, extra string, ok bool) {
+	ticker, rest, ok := parseTickerPrefix(message)
+	if !ok || rest == "" {
+		return "", "", false
+	}
+	if _, valid := yahoo.ParseRange(rest); valid {
+		return "", "", false
+	}
+	return ticker, rest, true
 }
 
 // parsePreviewArg accepts "$NOW YTD", "NOW YTD", or a bare ticker.
