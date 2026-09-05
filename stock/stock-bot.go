@@ -166,6 +166,10 @@ func (b *stockBot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	req, ok := ParseQuoteRequest(m.Content)
 	if !ok {
+		if ticker, extra, unknown := unknownRangeAfterTicker(m.Content); unknown {
+			logProcessed(m, "unknown-range")
+			replyText(s, m, unknownRangeReply(ticker, extra))
+		}
 		return
 	}
 
