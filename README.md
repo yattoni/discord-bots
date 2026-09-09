@@ -2,6 +2,32 @@
 
 Discord bots that fetch and post earthquakes, gas prices, and stock quotes.
 
+## Gas price bot
+
+A scheduled AWS Lambda that posts AAA national averages plus a few GasBuddy station prices to a Discord webhook.
+
+GasBuddy sits behind Cloudflare and fills in prices with JavaScript after load, so a plain `http.Get` either hits a challenge or returns spinner HTML. Station pages are fetched with [Cloudflare Browser Run `/scrape`](https://developers.cloudflare.com/browser-run/quick-actions/scrape-endpoint/): a headless browser waits until the price nodes are rendered, then extracts Regular, Midgrade, and Premium.
+
+### Cloudflare setup
+
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com/), copy the account ID
+2. Create an API token with **Browser Rendering - Edit** (Account)
+3. On the Lambda, set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` next to the existing `WEBHOOK_URL`
+4. Give the function at least **3 minutes** to run — each station scrape can take tens of seconds
+
+Workers Free allows 10 minutes of browser time per day and 1 Quick Action every 10 seconds, which is enough for this bot's three stations. Workers Paid raises those limits if you add more stations.
+
+### Run
+
+```sh
+export WEBHOOK_URL=https://discord.com/api/webhooks/...
+export CLOUDFLARE_ACCOUNT_ID=your-account-id
+export CLOUDFLARE_API_TOKEN=your-api-token
+go run ./gas
+```
+
+Outside Lambda this runs once and exits. Package with `./package-gas-bot.sh`.
+
 ## Stock quote bot
 
 A websocket Discord bot that watches for messages that are only a ticker, like `$NOW` or `$NOW YTD`, then replies with a Yahoo Finance quote card:
