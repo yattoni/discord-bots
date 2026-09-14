@@ -289,7 +289,7 @@ func parseChart(body []byte, rng Range) (*Quote, error) {
 		RegularEnd:     time.Unix(meta.CurrentTradingPeriod.Regular.End, 0).UTC(),
 		PostEnd:        time.Unix(meta.CurrentTradingPeriod.Post.End, 0).UTC(),
 	}
-	if rng != RangeToday {
+	if rng != RangeToday || quote.IsIndex() {
 		quote.PreStart = time.Time{}
 		quote.RegularStart = time.Time{}
 		quote.RegularEnd = time.Time{}
@@ -352,6 +352,9 @@ func (q *Quote) HasExtendedHours() bool {
 		return false
 	}
 	if q.IsCrypto() {
+		return false
+	}
+	if q.IsIndex() {
 		return false
 	}
 	if q.PreStart.IsZero() || q.RegularStart.IsZero() || q.RegularEnd.IsZero() || q.PostEnd.IsZero() {

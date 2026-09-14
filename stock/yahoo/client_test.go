@@ -160,6 +160,23 @@ func TestParseIndexChart(t *testing.T) {
 	assert.InDelta(t, -0.014, quote.Change, 0.0001)
 	assert.Equal(t, 3, len(quote.Points))
 	assert.Equal(t, "Market hours", quote.SessionLabel())
+	assert.True(t, quote.PreStart.IsZero())
+	assert.True(t, quote.PostEnd.IsZero())
+}
+
+func TestIndexHasNoExtendedHoursEvenWhenYahooReportsSessions(t *testing.T) {
+	quote := &Quote{
+		InstrumentType: "INDEX",
+		Range:          RangeToday,
+		PreStart:       time.Unix(1000, 0).UTC(),
+		RegularStart:   time.Unix(2000, 0).UTC(),
+		RegularEnd:     time.Unix(3000, 0).UTC(),
+		PostEnd:        time.Unix(4000, 0).UTC(),
+		LastTradeTime:  time.Unix(3500, 0).UTC(),
+	}
+	assert.True(t, quote.IsIndex())
+	assert.False(t, quote.HasExtendedHours())
+	assert.Equal(t, "Market hours", quote.SessionLabel())
 }
 
 func TestFetchQuoteUsesIncludePrePost(t *testing.T) {
