@@ -10,9 +10,9 @@ A websocket Discord bot that watches for messages that are only a ticker, like `
 - dollar and percent change for today, or over the requested range (green up / red down)
 - chart of today's session or the requested range (green above the baseline, red below)
 
-Tickers are 1–5 letters, with an optional share class (`$BRK.B`) or crypto pair (`$BTC-USD`). Optionally add a range after the ticker: `5D`, `1M`, `3M`, `6M`, `1Y`, or `YTD` (case insensitive). `$NOW` still shows today's session. An unrecognized range after the ticker gets a reply listing those options. Other extra text around the ticker is ignored.
+Tickers are 1–5 letters, with an optional share class (`$BRK.B`), crypto pair (`$BTC-USD`), or Yahoo index caret (`$^TNX`, `$^GSPC`, `$^VIX`). Optionally add a range after the ticker: `5D`, `1M`, `3M`, `6M`, `1Y`, or `YTD` (case insensitive). `$NOW` still shows today's session. An unrecognized range after the ticker gets a reply listing those options. Other extra text around the ticker is ignored.
 
-`$BTC` is treated as Bitcoin spot (`BTC-USD`). Other crypto pairs use Yahoo's hyphenated names, like `$ETH-USD`.
+`$BTC` is treated as Bitcoin spot (`BTC-USD`). Other crypto pairs use Yahoo's hyphenated names, like `$ETH-USD`. Index and treasury quotes use Yahoo's caret symbols, like `$^TNX` for the 10-year yield.
 
 Mention the bot with `help` (for example `@stock-bot help`) to get a short explanation of how it works. Mention it with any other question — including ones unrelated to stocks — and it replies in character as Jiang from *The Big Short*, using Gemma 4 31B Instruct (`google/gemma-4-31b-it`) through OpenRouter. Messages the bot processes are written to its logs.
 

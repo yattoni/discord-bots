@@ -112,6 +112,73 @@ func TestParseCryptoChart(t *testing.T) {
 	assert.Equal(t, "24h", quote.SessionLabel())
 }
 
+const sampleIndexChart = `{
+  "chart": {
+    "result": [{
+      "meta": {
+        "currency": "USD",
+        "symbol": "^TNX",
+        "exchangeTimezoneName": "America/Chicago",
+        "instrumentType": "INDEX",
+        "regularMarketPrice": 4.961,
+        "chartPreviousClose": 4.975,
+        "previousClose": 4.975,
+        "priceHint": 4,
+        "shortName": "CBOE Interest Rate 10 Year T No",
+        "longName": "CBOE Interest Rate 10 Year T No",
+        "fulldayPrice": 4.961,
+        "fulldayChange": -0.014,
+        "fulldayChangePercent": -0.281,
+        "currentTradingPeriod": {
+          "pre": {"timezone": "CDT", "start": 1000, "end": 1000, "gmtoffset": -18000},
+          "regular": {"timezone": "CDT", "start": 1000, "end": 25000, "gmtoffset": -18000},
+          "post": {"timezone": "CDT", "start": 25000, "end": 25000, "gmtoffset": -18000}
+        }
+      },
+      "timestamp": [2000, 4000, 6000],
+      "indicators": {
+        "quote": [{
+          "close": [4.980, 4.970, 4.961]
+        }]
+      }
+    }],
+    "error": null
+  }
+}`
+
+func TestParseIndexChart(t *testing.T) {
+	quote, err := parseChart([]byte(sampleIndexChart), RangeToday)
+	require.NoError(t, err)
+	assert.Equal(t, "^TNX", quote.Symbol)
+	assert.Equal(t, "CBOE Interest Rate 10 Year T No", quote.ShortName)
+	assert.Equal(t, "INDEX", quote.InstrumentType)
+	assert.True(t, quote.IsIndex())
+	assert.False(t, quote.IsCrypto())
+	assert.False(t, quote.HasExtendedHours())
+	assert.Equal(t, 4.961, quote.Price)
+	assert.Equal(t, 4.975, quote.PreviousClose)
+	assert.InDelta(t, -0.014, quote.Change, 0.0001)
+	assert.Equal(t, 3, len(quote.Points))
+	assert.Equal(t, "Market hours", quote.SessionLabel())
+	assert.True(t, quote.PreStart.IsZero())
+	assert.True(t, quote.PostEnd.IsZero())
+}
+
+func TestIndexHasNoExtendedHoursEvenWhenYahooReportsSessions(t *testing.T) {
+	quote := &Quote{
+		InstrumentType: "INDEX",
+		Range:          RangeToday,
+		PreStart:       time.Unix(1000, 0).UTC(),
+		RegularStart:   time.Unix(2000, 0).UTC(),
+		RegularEnd:     time.Unix(3000, 0).UTC(),
+		PostEnd:        time.Unix(4000, 0).UTC(),
+		LastTradeTime:  time.Unix(3500, 0).UTC(),
+	}
+	assert.True(t, quote.IsIndex())
+	assert.False(t, quote.HasExtendedHours())
+	assert.Equal(t, "Market hours", quote.SessionLabel())
+}
+
 func TestFetchQuoteUsesIncludePrePost(t *testing.T) {
 	var gotURL string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -147,6 +214,25 @@ func TestFetchQuoteCryptoPath(t *testing.T) {
 	assert.Equal(t, "BTC-USD", quote.Symbol)
 	assert.Contains(t, gotURL, "/v8/finance/chart/BTC-USD")
 	assert.True(t, quote.IsCrypto())
+}
+
+func TestFetchQuoteEncodesCaretIndex(t *testing.T) {
+	var gotURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotURL = r.URL.String()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(sampleIndexChart))
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.baseURL = server.URL
+	quote, err := client.FetchQuote("^TNX")
+	require.NoError(t, err)
+	assert.Equal(t, "^TNX", quote.Symbol)
+	assert.True(t, quote.IsIndex())
+	assert.Contains(t, gotURL, "/v8/finance/chart/%5ETNX")
+	assert.NotContains(t, gotURL, "/chart/^TNX")
 }
 
 func TestFetchQuoteNotFound(t *testing.T) {
@@ -251,6 +337,19 @@ func TestFetchQuoteLiveCrypto(t *testing.T) {
 	assert.Greater(t, quote.Price, 0.0)
 	assert.Greater(t, len(quote.Points), 10)
 	assert.Contains(t, strings.ToLower(quote.ShortName), "bitcoin")
+}
+
+func TestFetchQuoteLiveIndex(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := NewClient().FetchQuote("^TNX")
+	require.NoError(t, err)
+	assert.Equal(t, "^TNX", quote.Symbol)
+	assert.True(t, quote.IsIndex())
+	assert.Greater(t, quote.Price, 0.0)
+	assert.Greater(t, len(quote.Points), 10)
+	assert.Contains(t, strings.ToLower(quote.ShortName), "10 year")
 }
 
 func TestParseChartRangeUsesStartOfWindow(t *testing.T) {

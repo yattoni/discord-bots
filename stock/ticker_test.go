@@ -28,6 +28,13 @@ func TestParseQuoteRequest(t *testing.T) {
 		{name: "crypto pair whitespace", message: "  $SOL-USD  \n", ticker: "SOL-USD", ok: true},
 		{name: "bitcoin alias", message: "$BTC", ticker: "BTC-USD", ok: true},
 		{name: "bitcoin alias lowercase", message: "$btc", ticker: "BTC-USD", ok: true},
+		{name: "ten year yield", message: "$^TNX", ticker: "^TNX", ok: true},
+		{name: "ten year yield lowercase", message: "$^tnx", ticker: "^TNX", ok: true},
+		{name: "spx index", message: "$^GSPC", ticker: "^GSPC", ok: true},
+		{name: "vix whitespace", message: "  $^VIX  \n", ticker: "^VIX", ok: true},
+		{name: "dax five letters", message: "$^GDAXI", ticker: "^GDAXI", ok: true},
+		{name: "ten year ytd", message: "$^TNX YTD", ticker: "^TNX", rng: yahoo.RangeYTD, ok: true},
+		{name: "spx mixed case range", message: "$^gspc 1m", ticker: "^GSPC", rng: yahoo.Range1M, ok: true},
 		{name: "ytd range", message: "$NOW YTD", ticker: "NOW", rng: yahoo.RangeYTD, ok: true},
 		{name: "lowercase ytd", message: "$now ytd", ticker: "NOW", rng: yahoo.RangeYTD, ok: true},
 		{name: "mixed case range", message: "$AAPL 5d", ticker: "AAPL", rng: yahoo.Range5D, ok: true},
@@ -47,6 +54,11 @@ func TestParseQuoteRequest(t *testing.T) {
 		{name: "empty", message: "", ok: false},
 		{name: "just dollar", message: "$", ok: false},
 		{name: "numbers only not a ticker", message: "$123", ok: false},
+		{name: "caret without letters", message: "$^", ok: false},
+		{name: "double caret", message: "$^^TNX", ok: false},
+		{name: "caret share class", message: "$^TNX.B", ok: false},
+		{name: "caret crypto pair", message: "$^BTC-USD", ok: false},
+		{name: "caret too long", message: "$^GOOGLX", ok: false},
 	}
 
 	for _, tc := range cases {
@@ -71,7 +83,10 @@ func TestUnknownRangeAfterTicker(t *testing.T) {
 		{name: "lowercase unknown", in: "$aapl 1w", ticker: "AAPL", extra: "1w", ok: true},
 		{name: "phrase after ticker", in: "$NOW last week", ticker: "NOW", extra: "last week", ok: true},
 		{name: "bitcoin alias", in: "$btc 2y", ticker: "BTC-USD", extra: "2y", ok: true},
+		{name: "caret index unknown range", in: "$^TNX 2Y", ticker: "^TNX", extra: "2Y", ok: true},
 		{name: "valid ytd is not unknown", in: "$NOW YTD", ok: false},
+		{name: "caret ytd is not unknown", in: "$^TNX YTD", ok: false},
+		{name: "bare caret ticker is not unknown", in: "$^TNX", ok: false},
 		{name: "bare ticker is not unknown", in: "$NOW", ok: false},
 		{name: "mixed sentence", in: "buy $NOW please", ok: false},
 		{name: "range without space", in: "$NOWYTD", ok: false},
@@ -102,6 +117,16 @@ func TestParsePreviewArg(t *testing.T) {
 	assert.Equal(t, "AAPL", req.Ticker)
 	assert.Equal(t, yahoo.RangeToday, req.Range)
 
+	req, ok = parsePreviewArg("^TNX")
+	assert.True(t, ok)
+	assert.Equal(t, "^TNX", req.Ticker)
+	assert.Equal(t, yahoo.RangeToday, req.Range)
+
+	req, ok = parsePreviewArg("$^TNX YTD")
+	assert.True(t, ok)
+	assert.Equal(t, "^TNX", req.Ticker)
+	assert.Equal(t, yahoo.RangeYTD, req.Range)
+
 	_, ok = parsePreviewArg("NOW 2Y")
 	assert.False(t, ok)
 }
@@ -112,10 +137,16 @@ func TestResolveTicker(t *testing.T) {
 	assert.Equal(t, "BTC-USD", ResolveTicker("BTC-USD"))
 	assert.Equal(t, "NOW", ResolveTicker("now"))
 	assert.Equal(t, "ETH-USD", ResolveTicker("ETH-USD"))
+	assert.Equal(t, "^TNX", ResolveTicker("^TNX"))
+	assert.Equal(t, "^TNX", ResolveTicker("^tnx"))
+	assert.Equal(t, "^GSPC", ResolveTicker("^gspc"))
 }
 
 func TestQuoteRequestCacheKey(t *testing.T) {
 	assert.Equal(t, "NOW", quoteRequest{Ticker: "NOW"}.cacheKey())
 	assert.Equal(t, "NOW:YTD", quoteRequest{Ticker: "NOW", Range: yahoo.RangeYTD}.cacheKey())
 	assert.Equal(t, "$NOW YTD", quoteRequest{Ticker: "NOW", Range: yahoo.RangeYTD}.logLabel())
+	assert.Equal(t, "^TNX", quoteRequest{Ticker: "^TNX"}.cacheKey())
+	assert.Equal(t, "$^TNX", quoteRequest{Ticker: "^TNX"}.logLabel())
+	assert.Equal(t, "$^TNX YTD", quoteRequest{Ticker: "^TNX", Range: yahoo.RangeYTD}.logLabel())
 }

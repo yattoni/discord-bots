@@ -233,6 +233,56 @@ func TestRenderPNGCrypto(t *testing.T) {
 	assert.True(t, hasColorNear(t, pngBytes, greenColor))
 }
 
+func sampleIndexQuote() *yahoo.Quote {
+	start := time.Date(2026, 9, 14, 13, 0, 0, 0, time.UTC)
+	end := start.Add(7 * time.Hour)
+	prev := 4.975
+	points := []yahoo.Point{}
+	price := prev
+	for i := 0; i < 48; i++ {
+		price -= 0.001
+		points = append(points, yahoo.Point{
+			Time:  start.Add(time.Duration(i) * 8 * time.Minute),
+			Price: price,
+		})
+	}
+	return &yahoo.Quote{
+		Symbol:         "^TNX",
+		ShortName:      "CBOE Interest Rate 10 Year T No",
+		Currency:       "USD",
+		InstrumentType: "INDEX",
+		Price:          price,
+		PreviousClose:  prev,
+		Change:         price - prev,
+		ChangePercent:  ((price - prev) / prev) * 100,
+		PriceHint:      4,
+		ExchangeTZ:     "America/Chicago",
+		Points:         points,
+		PreStart:       start,
+		RegularStart:   start,
+		RegularEnd:     end,
+		PostEnd:        end,
+		LastTradeTime:  points[len(points)-1].Time,
+	}
+}
+
+func TestRenderPNGIndex(t *testing.T) {
+	quote := sampleIndexQuote()
+	require.True(t, quote.IsIndex())
+	require.False(t, quote.HasExtendedHours())
+	assert.Equal(t, "Market hours", quote.SessionLabel())
+	assert.Equal(t, "4.9610", formatMoney(4.961, "USD", 4, true))
+	assert.Equal(t, "-0.0140", formatMoney(-0.014, "USD", 4, true))
+	assert.Equal(t, "Yahoo Finance", sourceLabel(quote))
+	pngBytes, err := RenderPNG(quote)
+	require.NoError(t, err)
+	cfg, err := DecodeSize(pngBytes)
+	require.NoError(t, err)
+	assert.Equal(t, width, cfg.Width)
+	assert.Equal(t, height, cfg.Height)
+	assert.True(t, hasColorNear(t, pngBytes, redColor))
+}
+
 func TestRenderPNGLive(t *testing.T) {
 	if os.Getenv("SKIP_LIVE") != "" {
 		t.Skip("live Yahoo Finance test disabled")
@@ -267,6 +317,21 @@ func TestRenderPNGLiveCrypto(t *testing.T) {
 	}
 	quote, err := yahoo.NewClient().FetchQuote("BTC-USD")
 	require.NoError(t, err)
+	pngBytes, err := RenderPNG(quote)
+	require.NoError(t, err)
+	cfg, err := DecodeSize(pngBytes)
+	require.NoError(t, err)
+	assert.Equal(t, width, cfg.Width)
+	assert.Equal(t, height, cfg.Height)
+}
+
+func TestRenderPNGLiveIndex(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := yahoo.NewClient().FetchQuote("^TNX")
+	require.NoError(t, err)
+	require.True(t, quote.IsIndex())
 	pngBytes, err := RenderPNG(quote)
 	require.NoError(t, err)
 	cfg, err := DecodeSize(pngBytes)

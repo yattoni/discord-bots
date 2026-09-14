@@ -10,7 +10,8 @@ import (
 // tickerPrefixPattern matches a message that starts with $TICKER, with optional leftover text.
 // US common stocks are 1-5 letters; a single-letter share class (e.g. BRK.B) is allowed.
 // Yahoo crypto pairs use a hyphenated quote currency (e.g. BTC-USD for Bitcoin spot).
-var tickerPrefixPattern = regexp.MustCompile(`(?i)^\$([A-Z]{1,5}(?:\.[A-Z]|-[A-Z]{1,4})?)(?:\s+(.*))?$`)
+// Yahoo index and treasury symbols keep their caret prefix (e.g. ^TNX, ^GSPC, ^VIX).
+var tickerPrefixPattern = regexp.MustCompile(`(?i)^\$(\^[A-Z]{1,5}|[A-Z]{1,5}(?:\.[A-Z]|-[A-Z]{1,4})?)(?:\s+(.*))?$`)
 
 const quoteRangeOptions = "`5D`, `1M`, `3M`, `6M`, `1Y`, or `YTD`"
 

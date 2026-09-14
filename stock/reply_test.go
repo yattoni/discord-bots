@@ -24,6 +24,12 @@ func TestQuoteErrorReply(t *testing.T) {
 			substr: "I couldn't find `$ZZZZZ`",
 		},
 		{
+			name:   "unknown index ticker",
+			ticker: "^ZZZZ",
+			err:    fmt.Errorf("%w: No data found, symbol may be delisted", yahoo.ErrNotFound),
+			substr: "I couldn't find `$^ZZZZ`",
+		},
+		{
 			name:   "no chart data",
 			ticker: "NOW",
 			err:    fmt.Errorf("%w for NOW", yahoo.ErrNoData),
@@ -87,6 +93,25 @@ func TestFormatQuoteTextCrypto(t *testing.T) {
 	assert.Contains(t, got, "24h")
 }
 
+func TestFormatQuoteTextIndex(t *testing.T) {
+	got := formatQuoteText(&yahoo.Quote{
+		Symbol:         "^TNX",
+		ShortName:      "CBOE Interest Rate 10 Year T No",
+		Currency:       "USD",
+		InstrumentType: "INDEX",
+		Price:          4.961,
+		Change:         -0.014,
+		ChangePercent:  -0.281,
+		PriceHint:      4,
+		LastTradeTime:  time.Unix(6000, 0).UTC(),
+	})
+	assert.Contains(t, got, "**^TNX** · CBOE Interest Rate 10 Year T No")
+	assert.Contains(t, got, "4.9610")
+	assert.Contains(t, got, "-0.0140")
+	assert.NotContains(t, got, "$4.9610")
+	assert.NotContains(t, got, "-$0.0140")
+}
+
 func TestFormatQuoteTextRange(t *testing.T) {
 	got := formatQuoteText(&yahoo.Quote{
 		Symbol:        "NOW",
@@ -119,6 +144,8 @@ func TestUnknownRangeReply(t *testing.T) {
 func TestQuoteFileName(t *testing.T) {
 	assert.Equal(t, "NOW.png", quoteFileName(&yahoo.Quote{Symbol: "NOW"}))
 	assert.Equal(t, "NOW-YTD.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.RangeYTD}))
+	assert.Equal(t, "^TNX.png", quoteFileName(&yahoo.Quote{Symbol: "^TNX"}))
+	assert.Equal(t, "^TNX-YTD.png", quoteFileName(&yahoo.Quote{Symbol: "^TNX", Range: yahoo.RangeYTD}))
 }
 
 func TestQuoteImageFallback(t *testing.T) {
