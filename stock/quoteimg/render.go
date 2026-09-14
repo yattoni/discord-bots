@@ -126,7 +126,7 @@ func drawHeader(dc *gg.Context, quote *yahoo.Quote, accent color.Color, up bool)
 	}
 	dc.DrawString(name, 40+symbolWidth+14, 58)
 
-	priceText := formatMoney(quote.Price, quote.Currency, quote.PriceHint)
+	priceText := formatMoney(quote.Price, quote.Currency, quote.PriceHint, quote.IsIndex())
 	dc.SetFontFace(priceFace)
 	dc.SetColor(textPrimary)
 	dc.DrawString(priceText, 40, 118)
@@ -137,7 +137,7 @@ func drawHeader(dc *gg.Context, quote *yahoo.Quote, accent color.Color, up bool)
 	}
 	changeText := fmt.Sprintf("%s%s  (%s%s%%)",
 		sign,
-		formatMoney(quote.Change, quote.Currency, quote.PriceHint),
+		formatMoney(quote.Change, quote.Currency, quote.PriceHint, quote.IsIndex()),
 		sign,
 		formatNumber(quote.ChangePercent, 2),
 	)
@@ -488,15 +488,15 @@ func sessionCaption(quote *yahoo.Quote) string {
 	return fmt.Sprintf("%s  ·  %s  ·  %s",
 		whenText,
 		quote.SessionLabel(),
-		sourceLabel(quote.Currency),
+		sourceLabel(quote),
 	)
 }
 
-func sourceLabel(currency string) string {
-	if currency == "" {
+func sourceLabel(quote *yahoo.Quote) string {
+	if quote.IsIndex() || quote.Currency == "" {
 		return "Yahoo Finance"
 	}
-	return currency + " · Yahoo Finance"
+	return quote.Currency + " · Yahoo Finance"
 }
 
 func location(name string) *time.Location {
@@ -510,8 +510,11 @@ func location(name string) *time.Location {
 	return loc
 }
 
-func formatMoney(amount float64, currency string, hint int) string {
+func formatMoney(amount float64, currency string, hint int, index bool) string {
 	number := formatNumber(amount, hint)
+	if index {
+		return number
+	}
 	switch strings.ToUpper(currency) {
 	case "", "USD":
 		if amount < 0 {

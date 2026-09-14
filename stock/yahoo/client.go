@@ -336,6 +336,11 @@ func (q *Quote) IsCrypto() bool {
 	return strings.EqualFold(q.InstrumentType, "CRYPTOCURRENCY")
 }
 
+// IsIndex reports whether Yahoo classified this quote as an index (including treasury yields like ^TNX).
+func (q *Quote) IsIndex() bool {
+	return strings.EqualFold(q.InstrumentType, "INDEX")
+}
+
 // MultiDay reports whether this quote covers a window longer than today's session.
 func (q *Quote) MultiDay() bool {
 	return q.Range != RangeToday

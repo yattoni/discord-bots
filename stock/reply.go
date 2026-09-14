@@ -35,8 +35,8 @@ func formatQuoteText(q *yahoo.Quote) string {
 	if hint <= 0 {
 		hint = 2
 	}
-	price := formatMoneyText(q.Price, q.Currency, hint)
-	change := formatMoneyText(q.Change, q.Currency, hint)
+	price := formatMoneyText(q.Price, q.Currency, hint, q.IsIndex())
+	change := formatMoneyText(q.Change, q.Currency, hint, q.IsIndex())
 	if q.Change > 0 {
 		change = "+" + change
 	}
@@ -55,8 +55,11 @@ func formatQuoteText(q *yahoo.Quote) string {
 	return strings.Join(lines, "\n")
 }
 
-func formatMoneyText(amount float64, currency string, hint int) string {
+func formatMoneyText(amount float64, currency string, hint int, index bool) string {
 	number := fmt.Sprintf("%.*f", hint, amount)
+	if index {
+		return number
+	}
 	switch strings.ToUpper(currency) {
 	case "", "USD":
 		if amount < 0 {
