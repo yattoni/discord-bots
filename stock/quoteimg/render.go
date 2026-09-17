@@ -105,6 +105,10 @@ func drawHeader(dc *gg.Context, quote *yahoo.Quote, accent color.Color, up bool)
 	if err != nil {
 		return err
 	}
+	closeFace, err := loadFace("fonts/LiberationSans-Bold.ttf", 16)
+	if err != nil {
+		return err
+	}
 	metaFace, err := loadFace("fonts/LiberationSans-Regular.ttf", 14)
 	if err != nil {
 		return err
@@ -131,25 +135,68 @@ func drawHeader(dc *gg.Context, quote *yahoo.Quote, accent color.Color, up bool)
 	dc.SetColor(textPrimary)
 	dc.DrawString(priceText, 40, 118)
 
+	changeText := formatChange(quote.Change, quote.ChangePercent, quote.Currency, quote.PriceHint, quote.IsIndex(), up)
+	priceWidth, _ := dc.MeasureString(priceText)
+	dc.SetFontFace(changeFace)
+	dc.SetColor(accent)
+	changeX := 40 + priceWidth + 16
+	dc.DrawString(changeText, changeX, 112)
+
+	if badge := quote.HeadlineSessionBadge(); badge != "" {
+		changeWidth, _ := dc.MeasureString(changeText)
+		dc.SetFontFace(metaFace)
+		dc.SetColor(textSecondary)
+		dc.DrawString(badge, changeX+changeWidth+12, 110)
+	}
+
+	captionY := 146.0
+	if quote.ShowRegularClose() {
+		closeUp := quote.RegularChange >= 0
+		closeAccent := greenColor
+		if !closeUp {
+			closeAccent = redColor
+		}
+		dc.SetFontFace(metaFace)
+		dc.SetColor(textSecondary)
+		dc.DrawString("Close", 40, 148)
+		closeLabelW, _ := dc.MeasureString("Close")
+
+		closePrice := formatMoney(quote.RegularPrice, quote.Currency, quote.PriceHint, quote.IsIndex())
+		dc.SetFontFace(closeFace)
+		dc.SetColor(textPrimary)
+		dc.DrawString(closePrice, 40+closeLabelW+10, 150)
+		closePriceW, _ := dc.MeasureString(closePrice)
+
+		closeChange := formatChange(quote.RegularChange, quote.RegularChangePercent, quote.Currency, quote.PriceHint, quote.IsIndex(), closeUp)
+		dc.SetColor(closeAccent)
+		dc.DrawString(closeChange, 40+closeLabelW+10+closePriceW+10, 150)
+		captionY = 174
+	}
+
+	dc.SetFontFace(metaFace)
+	dc.SetColor(textSecondary)
+	dc.DrawString(sessionCaption(quote), 40, captionY)
+	return nil
+}
+
+func formatChange(change, pct float64, currency string, hint int, index, up bool) string {
 	sign := "+"
 	if !up {
 		sign = ""
 	}
-	changeText := fmt.Sprintf("%s%s  (%s%s%%)",
+	return fmt.Sprintf("%s%s  (%s%s%%)",
 		sign,
-		formatMoney(quote.Change, quote.Currency, quote.PriceHint, quote.IsIndex()),
+		formatMoney(change, currency, hint, index),
 		sign,
-		formatNumber(quote.ChangePercent, 2),
+		formatNumber(pct, 2),
 	)
-	priceWidth, _ := dc.MeasureString(priceText)
-	dc.SetFontFace(changeFace)
-	dc.SetColor(accent)
-	dc.DrawString(changeText, 40+priceWidth+16, 112)
+}
 
-	dc.SetFontFace(metaFace)
-	dc.SetColor(textSecondary)
-	dc.DrawString(sessionCaption(quote), 40, 146)
-	return nil
+func headerShift(quote *yahoo.Quote) float64 {
+	if quote.ShowRegularClose() {
+		return 28
+	}
+	return 0
 }
 
 func drawChart(dc *gg.Context, quote *yahoo.Quote) error {
@@ -158,10 +205,11 @@ func drawChart(dc *gg.Context, quote *yahoo.Quote) error {
 		return err
 	}
 
+	shift := headerShift(quote)
 	chartX := 40.0
-	chartY := 175.0
+	chartY := 175.0 + shift
 	chartW := float64(width - 130)
-	chartH := 280.0
+	chartH := 280.0 - shift
 
 	sessionStart := quote.PreStart
 	sessionEnd := quote.PostEnd
@@ -485,11 +533,14 @@ func sessionCaption(quote *yahoo.Quote) string {
 	if quote.MultiDay() {
 		whenText = when.Format("Jan 2, 2006")
 	}
-	return fmt.Sprintf("%s  ·  %s  ·  %s",
-		whenText,
-		quote.SessionLabel(),
-		sourceLabel(quote),
-	)
+	parts := []string{whenText}
+	if quote.HeadlineSessionBadge() == "" {
+		if label := quote.SessionLabel(); label != "" {
+			parts = append(parts, label)
+		}
+	}
+	parts = append(parts, sourceLabel(quote))
+	return strings.Join(parts, "  ·  ")
 }
 
 func sourceLabel(quote *yahoo.Quote) string {

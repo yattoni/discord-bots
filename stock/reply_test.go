@@ -76,6 +76,35 @@ func TestFormatQuoteText(t *testing.T) {
 	assert.Contains(t, got, "+6.00%")
 }
 
+func TestFormatQuoteTextAfterHours(t *testing.T) {
+	got := formatQuoteText(&yahoo.Quote{
+		Symbol:               "GNRC",
+		ShortName:            "Generac Holdings Inc.",
+		Currency:             "USD",
+		Price:                232.80,
+		Change:               57.69,
+		ChangePercent:        32.95,
+		RegularPrice:         175.11,
+		RegularChange:        0.08,
+		RegularChangePercent: 0.046,
+		PriceHint:            2,
+		PreStart:             time.Unix(1000, 0).UTC(),
+		RegularStart:         time.Unix(2000, 0).UTC(),
+		RegularEnd:           time.Unix(3000, 0).UTC(),
+		PostEnd:              time.Unix(4000, 0).UTC(),
+		LastTradeTime:        time.Unix(3500, 0).UTC(),
+	})
+	assert.Contains(t, got, "**GNRC** · Generac Holdings Inc.")
+	assert.Contains(t, got, "$232.80")
+	assert.Contains(t, got, "+$57.69")
+	assert.Contains(t, got, "+32.95%")
+	assert.Contains(t, got, "After hours")
+	assert.Contains(t, got, "Close $175.11")
+	assert.Contains(t, got, "+$0.08")
+	assert.Contains(t, got, "+0.05%")
+	assert.NotContains(t, got, "+$0.08 (+32.95%)")
+}
+
 func TestFormatQuoteTextCrypto(t *testing.T) {
 	got := formatQuoteText(&yahoo.Quote{
 		Symbol:         "BTC-USD",

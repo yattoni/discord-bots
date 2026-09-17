@@ -35,24 +35,32 @@ func formatQuoteText(q *yahoo.Quote) string {
 	if hint <= 0 {
 		hint = 2
 	}
-	price := formatMoneyText(q.Price, q.Currency, hint, q.IsIndex())
-	change := formatMoneyText(q.Change, q.Currency, hint, q.IsIndex())
-	if q.Change > 0 {
-		change = "+" + change
+	priceLine := formatPriceChangeLine(q.Price, q.Change, q.ChangePercent, q.Currency, hint, q.IsIndex())
+	lines := []string{header, priceLine}
+	if badge := q.HeadlineSessionBadge(); badge != "" {
+		lines[1] += "  ·  " + badge
 	}
-	pctSign := "+"
-	if q.ChangePercent < 0 {
-		pctSign = ""
+	if q.ShowRegularClose() {
+		closeLine := "Close " + formatPriceChangeLine(q.RegularPrice, q.RegularChange, q.RegularChangePercent, q.Currency, hint, q.IsIndex())
+		lines = append(lines, closeLine)
 	}
-
-	lines := []string{
-		header,
-		fmt.Sprintf("%s  %s (%s%.2f%%)", price, change, pctSign, q.ChangePercent),
-	}
-	if label := q.SessionLabel(); label != "" {
+	if label := q.SessionLabel(); label != "" && q.HeadlineSessionBadge() == "" {
 		lines = append(lines, label)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatPriceChangeLine(price, change, pct float64, currency string, hint int, index bool) string {
+	priceText := formatMoneyText(price, currency, hint, index)
+	changeText := formatMoneyText(change, currency, hint, index)
+	if change > 0 {
+		changeText = "+" + changeText
+	}
+	pctSign := "+"
+	if pct < 0 {
+		pctSign = ""
+	}
+	return fmt.Sprintf("%s  %s (%s%.2f%%)", priceText, changeText, pctSign, pct)
 }
 
 func formatMoneyText(amount float64, currency string, hint int, index bool) string {
