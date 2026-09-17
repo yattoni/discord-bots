@@ -53,8 +53,10 @@ func TestParseChart(t *testing.T) {
 	assert.Equal(t, "ServiceNow, Inc.", quote.ShortName)
 	assert.Equal(t, 144.92, quote.Price)
 	assert.Equal(t, 136.72, quote.PreviousClose)
-	assert.Equal(t, 8.20, quote.Change)
-	assert.Equal(t, 6.00, quote.ChangePercent)
+	assert.InDelta(t, 8.20, quote.Change, 0.0001)
+	assert.InDelta(t, 6.00, quote.ChangePercent, 0.01)
+	assert.Equal(t, 144.92, quote.RegularPrice)
+	assert.InDelta(t, 8.20, quote.RegularChange, 0.01)
 	assert.Equal(t, 3, len(quote.Points))
 	assert.Equal(t, 140.00, quote.Points[0].Price)
 	assert.Equal(t, 144.92, quote.Points[2].Price)
@@ -64,6 +66,101 @@ func TestParseChart(t *testing.T) {
 	assert.True(t, quote.HasExtendedHours())
 	assert.False(t, quote.IsCrypto())
 	assert.Equal(t, "After hours", quote.SessionLabel())
+	assert.False(t, quote.ShowRegularClose())
+	assert.Equal(t, "After hours", quote.HeadlineSessionBadge())
+}
+
+const sampleAfterHoursChart = `{
+  "chart": {
+    "result": [{
+      "meta": {
+        "currency": "USD",
+        "symbol": "GNRC",
+        "exchangeTimezoneName": "America/New_York",
+        "regularMarketPrice": 175.11,
+        "regularMarketChangePercent": 0.046,
+        "chartPreviousClose": 175.03,
+        "previousClose": 175.03,
+        "priceHint": 2,
+        "shortName": "Generac Holdings Inc.",
+        "longName": "Generac Holdings Inc.",
+        "instrumentType": "EQUITY",
+        "fulldayPrice": 232.80,
+        "fulldayChange": 0.08,
+        "fulldayChangePercent": 0.046,
+        "currentTradingPeriod": {
+          "pre": {"timezone": "EDT", "start": 1000, "end": 2000, "gmtoffset": -14400},
+          "regular": {"timezone": "EDT", "start": 2000, "end": 3000, "gmtoffset": -14400},
+          "post": {"timezone": "EDT", "start": 3000, "end": 4000, "gmtoffset": -14400}
+        }
+      },
+      "timestamp": [1100, 2100, 2900, 3500],
+      "indicators": {
+        "quote": [{
+          "close": [174.50, 175.00, 175.11, 232.80]
+        }]
+      }
+    }],
+    "error": null
+  }
+}`
+
+func TestParseChartAfterHoursUsesSessionChange(t *testing.T) {
+	quote, err := parseChart([]byte(sampleAfterHoursChart), RangeToday)
+	require.NoError(t, err)
+	assert.Equal(t, "GNRC", quote.Symbol)
+	assert.Equal(t, 232.80, quote.Price)
+	assert.Equal(t, 175.11, quote.RegularPrice)
+	assert.InDelta(t, 0.08, quote.RegularChange, 0.0001)
+	assert.Equal(t, 0.046, quote.RegularChangePercent)
+	assert.InDelta(t, 57.69, quote.Change, 0.0001)
+	assert.InDelta(t, 32.95, quote.ChangePercent, 0.01)
+	assert.Equal(t, "After hours", quote.SessionLabel())
+	assert.True(t, quote.ShowRegularClose())
+	assert.Equal(t, "After hours", quote.HeadlineSessionBadge())
+}
+
+const samplePremarketChart = `{
+  "chart": {
+    "result": [{
+      "meta": {
+        "currency": "USD",
+        "symbol": "GNRC",
+        "exchangeTimezoneName": "America/New_York",
+        "regularMarketPrice": 175.11,
+        "regularMarketChangePercent": 0.046,
+        "previousClose": 175.03,
+        "priceHint": 2,
+        "shortName": "Generac Holdings Inc.",
+        "instrumentType": "EQUITY",
+        "fulldayPrice": 178.00,
+        "fulldayChange": 0.08,
+        "fulldayChangePercent": 0.046,
+        "currentTradingPeriod": {
+          "pre": {"timezone": "EDT", "start": 1000, "end": 2000, "gmtoffset": -14400},
+          "regular": {"timezone": "EDT", "start": 2000, "end": 3000, "gmtoffset": -14400},
+          "post": {"timezone": "EDT", "start": 3000, "end": 4000, "gmtoffset": -14400}
+        }
+      },
+      "timestamp": [1100, 1500],
+      "indicators": {
+        "quote": [{
+          "close": [176.00, 178.00]
+        }]
+      }
+    }],
+    "error": null
+  }
+}`
+
+func TestParseChartPremarketUsesChangeFromPreviousClose(t *testing.T) {
+	quote, err := parseChart([]byte(samplePremarketChart), RangeToday)
+	require.NoError(t, err)
+	assert.Equal(t, 178.00, quote.Price)
+	assert.InDelta(t, 2.97, quote.Change, 0.0001)
+	assert.Equal(t, "Premarket", quote.SessionLabel())
+	assert.False(t, quote.ShowRegularClose())
+	assert.Equal(t, "Premarket", quote.HeadlineSessionBadge())
 }
 
 const sampleCryptoChart = `{

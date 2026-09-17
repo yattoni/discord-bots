@@ -51,6 +51,68 @@ func sampleQuote(change float64) *yahoo.Quote {
 	}
 }
 
+func sampleAfterHoursQuote() *yahoo.Quote {
+	start := time.Date(2026, 9, 16, 8, 0, 0, 0, time.UTC)
+	regular := start.Add(5 * time.Hour)
+	regularEnd := regular.Add(6*time.Hour + 30*time.Minute)
+	postEnd := regularEnd.Add(4 * time.Hour)
+	prev := 175.03
+	points := []yahoo.Point{}
+	price := prev
+	for i := 0; i < 90; i++ {
+		t := start.Add(time.Duration(i) * 8 * time.Minute)
+		if t.Before(regularEnd) {
+			price = 175.11
+		} else {
+			price = 175.11 + float64(i-60)*1.2
+			if price > 250 {
+				price = 232.80
+			}
+		}
+		points = append(points, yahoo.Point{Time: t, Price: price})
+	}
+	points[len(points)-1].Price = 232.80
+	return &yahoo.Quote{
+		Symbol:               "GNRC",
+		ShortName:            "Generac Holdings Inc.",
+		Currency:             "USD",
+		Price:                232.80,
+		PreviousClose:        prev,
+		Change:               57.69,
+		ChangePercent:        32.95,
+		RegularPrice:         175.11,
+		RegularChange:        0.08,
+		RegularChangePercent: 0.046,
+		PriceHint:            2,
+		ExchangeTZ:           "America/New_York",
+		Points:               points,
+		PreStart:             start,
+		RegularStart:         regular,
+		RegularEnd:           regularEnd,
+		PostEnd:              postEnd,
+		LastTradeTime:        points[len(points)-1].Time,
+	}
+}
+
+func TestRenderPNGAfterHours(t *testing.T) {
+	quote := sampleAfterHoursQuote()
+	require.True(t, quote.HasExtendedHours())
+	assert.Equal(t, "After hours", quote.SessionLabel())
+	assert.True(t, quote.ShowRegularClose())
+	assert.Equal(t, "After hours", quote.HeadlineSessionBadge())
+	pngBytes, err := RenderPNG(quote)
+	require.NoError(t, err)
+	cfg, err := DecodeSize(pngBytes)
+	require.NoError(t, err)
+	assert.Equal(t, width, cfg.Width)
+	assert.Equal(t, height, cfg.Height)
+	assert.True(t, hasColorNear(t, pngBytes, greenColor))
+	caption := sessionCaption(quote)
+	assert.Contains(t, caption, "Sep 16, 2026")
+	assert.Contains(t, caption, "USD · Yahoo Finance")
+	assert.NotContains(t, caption, "After hours")
+}
+
 func TestRenderPNGUpDay(t *testing.T) {
 	pngBytes, err := RenderPNG(sampleQuote(6.0))
 	require.NoError(t, err)

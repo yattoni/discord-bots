@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -27,24 +28,27 @@ func NewClient() *Client {
 
 // Quote is a day's worth of price action plus the latest quote.
 type Quote struct {
-	Symbol         string
-	ShortName      string
-	LongName       string
-	Currency       string
-	Price          float64
-	PreviousClose  float64
-	Change         float64
-	ChangePercent  float64
-	PriceHint      int
-	ExchangeTZ     string
-	InstrumentType string
-	Points         []Point
-	PreStart       time.Time
-	RegularStart   time.Time
-	RegularEnd     time.Time
-	PostEnd        time.Time
-	LastTradeTime  time.Time
-	Range          Range
+	Symbol               string
+	ShortName            string
+	LongName             string
+	Currency             string
+	Price                float64
+	PreviousClose        float64
+	Change               float64
+	ChangePercent        float64
+	RegularPrice         float64
+	RegularChange        float64
+	RegularChangePercent float64
+	PriceHint            int
+	ExchangeTZ           string
+	InstrumentType       string
+	Points               []Point
+	PreStart             time.Time
+	RegularStart         time.Time
+	RegularEnd           time.Time
+	PostEnd              time.Time
+	LastTradeTime        time.Time
+	Range                Range
 }
 
 type Point struct {
@@ -75,20 +79,21 @@ type chartResult struct {
 }
 
 type chartMeta struct {
-	Currency             string  `json:"currency"`
-	Symbol               string  `json:"symbol"`
-	ExchangeTimezoneName string  `json:"exchangeTimezoneName"`
-	RegularMarketPrice   float64 `json:"regularMarketPrice"`
-	ChartPreviousClose   float64 `json:"chartPreviousClose"`
-	PreviousClose        float64 `json:"previousClose"`
-	PriceHint            int     `json:"priceHint"`
-	ShortName            string  `json:"shortName"`
-	LongName             string  `json:"longName"`
-	InstrumentType       string  `json:"instrumentType"`
-	FulldayPrice         float64 `json:"fulldayPrice"`
-	FulldayChange        float64 `json:"fulldayChange"`
-	FulldayChangePercent float64 `json:"fulldayChangePercent"`
-	CurrentTradingPeriod struct {
+	Currency                   string  `json:"currency"`
+	Symbol                     string  `json:"symbol"`
+	ExchangeTimezoneName       string  `json:"exchangeTimezoneName"`
+	RegularMarketPrice         float64 `json:"regularMarketPrice"`
+	RegularMarketChangePercent float64 `json:"regularMarketChangePercent"`
+	ChartPreviousClose         float64 `json:"chartPreviousClose"`
+	PreviousClose              float64 `json:"previousClose"`
+	PriceHint                  int     `json:"priceHint"`
+	ShortName                  string  `json:"shortName"`
+	LongName                   string  `json:"longName"`
+	InstrumentType             string  `json:"instrumentType"`
+	FulldayPrice               float64 `json:"fulldayPrice"`
+	FulldayChange              float64 `json:"fulldayChange"`
+	FulldayChangePercent       float64 `json:"fulldayChangePercent"`
+	CurrentTradingPeriod       struct {
 		Pre     tradingPeriod `json:"pre"`
 		Regular tradingPeriod `json:"regular"`
 		Post    tradingPeriod `json:"post"`
@@ -232,12 +237,18 @@ func parseChart(body []byte, rng Range) (*Quote, error) {
 		})
 	}
 
+	regularEnd := time.Unix(meta.CurrentTradingPeriod.Regular.End, 0).UTC()
 	price := meta.FulldayPrice
 	if price == 0 {
 		price = meta.RegularMarketPrice
 	}
 	if price == 0 && len(points) > 0 {
 		price = points[len(points)-1].Price
+	}
+
+	regularPrice := meta.RegularMarketPrice
+	if regularPrice == 0 {
+		regularPrice = lastPriceAtOrBefore(points, regularEnd)
 	}
 
 	change := meta.FulldayChange
@@ -250,14 +261,25 @@ func parseChart(body []byte, rng Range) (*Quote, error) {
 		}
 		if price != 0 && prevClose != 0 {
 			change = price - prevClose
-			changePct = (change / prevClose) * 100
+			changePct = percentChange(change, prevClose)
 		} else {
 			change = 0
 			changePct = 0
 		}
-	} else if price != 0 && prevClose != 0 && change == 0 && changePct == 0 && price != prevClose {
+	} else if price != 0 && prevClose != 0 {
+		// Yahoo's fulldayChange is the regular-session move, even when fulldayPrice is after hours.
 		change = price - prevClose
-		changePct = (change / prevClose) * 100
+		changePct = percentChange(change, prevClose)
+	}
+
+	regularChange := 0.0
+	regularChangePct := 0.0
+	if regularPrice != 0 && prevClose != 0 {
+		regularChange = regularPrice - prevClose
+		regularChangePct = percentChange(regularChange, prevClose)
+		if meta.RegularMarketChangePercent != 0 {
+			regularChangePct = meta.RegularMarketChangePercent
+		}
 	}
 
 	hint := meta.PriceHint
@@ -271,23 +293,26 @@ func parseChart(body []byte, rng Range) (*Quote, error) {
 	}
 
 	quote := &Quote{
-		Symbol:         meta.Symbol,
-		ShortName:      name,
-		LongName:       meta.LongName,
-		Currency:       meta.Currency,
-		Price:          price,
-		PreviousClose:  prevClose,
-		Change:         change,
-		ChangePercent:  changePct,
-		PriceHint:      hint,
-		ExchangeTZ:     meta.ExchangeTimezoneName,
-		InstrumentType: meta.InstrumentType,
-		Points:         points,
-		Range:          rng,
-		PreStart:       time.Unix(meta.CurrentTradingPeriod.Pre.Start, 0).UTC(),
-		RegularStart:   time.Unix(meta.CurrentTradingPeriod.Regular.Start, 0).UTC(),
-		RegularEnd:     time.Unix(meta.CurrentTradingPeriod.Regular.End, 0).UTC(),
-		PostEnd:        time.Unix(meta.CurrentTradingPeriod.Post.End, 0).UTC(),
+		Symbol:               meta.Symbol,
+		ShortName:            name,
+		LongName:             meta.LongName,
+		Currency:             meta.Currency,
+		Price:                price,
+		PreviousClose:        prevClose,
+		Change:               change,
+		ChangePercent:        changePct,
+		RegularPrice:         regularPrice,
+		RegularChange:        regularChange,
+		RegularChangePercent: regularChangePct,
+		PriceHint:            hint,
+		ExchangeTZ:           meta.ExchangeTimezoneName,
+		InstrumentType:       meta.InstrumentType,
+		Points:               points,
+		Range:                rng,
+		PreStart:             time.Unix(meta.CurrentTradingPeriod.Pre.Start, 0).UTC(),
+		RegularStart:         time.Unix(meta.CurrentTradingPeriod.Regular.Start, 0).UTC(),
+		RegularEnd:           regularEnd,
+		PostEnd:              time.Unix(meta.CurrentTradingPeriod.Post.End, 0).UTC(),
 	}
 	if rng != RangeToday || quote.IsIndex() {
 		quote.PreStart = time.Time{}
@@ -298,6 +323,7 @@ func parseChart(body []byte, rng Range) (*Quote, error) {
 	if len(points) > 0 {
 		quote.LastTradeTime = points[len(points)-1].Time
 	}
+	applyAfterHoursHeadline(quote)
 	return quote, nil
 }
 
@@ -386,4 +412,68 @@ func (q *Quote) SessionLabel() string {
 	default:
 		return "Market hours"
 	}
+}
+
+// HeadlineSessionBadge is a short label drawn next to the latest price for
+// premarket and after-hours quotes, so those numbers are not mistaken for the close.
+func (q *Quote) HeadlineSessionBadge() string {
+	switch q.SessionLabel() {
+	case "Premarket", "After hours":
+		return q.SessionLabel()
+	default:
+		return ""
+	}
+}
+
+// ShowRegularClose reports whether the card should also show the 4pm close
+// underneath a distinct after-hours price.
+func (q *Quote) ShowRegularClose() bool {
+	if q.SessionLabel() != "After hours" {
+		return false
+	}
+	if q.RegularPrice <= 0 {
+		return false
+	}
+	return pricesDiffer(q.Price, q.RegularPrice, q.PriceHint)
+}
+
+func applyAfterHoursHeadline(q *Quote) {
+	if q.Range != RangeToday {
+		return
+	}
+	if q.SessionLabel() != "After hours" {
+		return
+	}
+	if q.RegularPrice <= 0 || !pricesDiffer(q.Price, q.RegularPrice, q.PriceHint) {
+		return
+	}
+	q.Change = q.Price - q.RegularPrice
+	q.ChangePercent = percentChange(q.Change, q.RegularPrice)
+}
+
+func lastPriceAtOrBefore(points []Point, t time.Time) float64 {
+	if t.IsZero() {
+		return 0
+	}
+	for i := len(points) - 1; i >= 0; i-- {
+		if !points[i].Time.After(t) {
+			return points[i].Price
+		}
+	}
+	return 0
+}
+
+func percentChange(change, base float64) float64 {
+	if base == 0 {
+		return 0
+	}
+	return (change / base) * 100
+}
+
+func pricesDiffer(a, b float64, hint int) bool {
+	if hint <= 0 {
+		hint = 2
+	}
+	scale := math.Pow(10, float64(hint))
+	return math.Round(a*scale) != math.Round(b*scale)
 }
