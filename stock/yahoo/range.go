@@ -12,6 +12,8 @@ const (
 	Range3M    Range = "3M"
 	Range6M    Range = "6M"
 	Range1Y    Range = "1Y"
+	Range2Y    Range = "2Y"
+	Range5Y    Range = "5Y"
 	RangeYTD   Range = "YTD"
 )
 
@@ -37,6 +39,10 @@ func ParseRange(s string) (Range, bool) {
 		return Range6M, true
 	case "1Y":
 		return Range1Y, true
+	case "2Y":
+		return Range2Y, true
+	case "5Y":
+		return Range5Y, true
 	case "YTD":
 		return RangeYTD, true
 	default:
@@ -57,6 +63,10 @@ func (r Range) spec() chartSpec {
 		return chartSpec{rangeValue: "6mo", interval: "1d"}
 	case Range1Y:
 		return chartSpec{rangeValue: "1y", interval: "1d"}
+	case Range2Y:
+		return chartSpec{rangeValue: "2y", interval: "1d"}
+	case Range5Y:
+		return chartSpec{rangeValue: "5y", interval: "1d"}
 	case RangeYTD:
 		return chartSpec{rangeValue: "ytd", interval: "1d"}
 	default:

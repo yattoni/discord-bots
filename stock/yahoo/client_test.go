@@ -496,22 +496,34 @@ func TestParseChartRangeIgnoresTodayChange(t *testing.T) {
 }
 
 func TestFetchQuoteRangeUsesYahooWindow(t *testing.T) {
-	var gotURL string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotURL = r.URL.String()
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(sampleChart))
-	}))
-	defer server.Close()
+	cases := []struct {
+		rng   Range
+		value string
+	}{
+		{rng: RangeYTD, value: "ytd"},
+		{rng: Range2Y, value: "2y"},
+		{rng: Range5Y, value: "5y"},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.rng), func(t *testing.T) {
+			var gotURL string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotURL = r.URL.String()
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(sampleChart))
+			}))
+			defer server.Close()
 
-	client := NewClient()
-	client.baseURL = server.URL
-	quote, err := client.FetchQuoteRange("NOW", RangeYTD)
-	require.NoError(t, err)
-	assert.Equal(t, RangeYTD, quote.Range)
-	assert.Contains(t, gotURL, "range=ytd")
-	assert.Contains(t, gotURL, "interval=1d")
-	assert.NotContains(t, gotURL, "includePrePost=true")
+			client := NewClient()
+			client.baseURL = server.URL
+			quote, err := client.FetchQuoteRange("NOW", tc.rng)
+			require.NoError(t, err)
+			assert.Equal(t, tc.rng, quote.Range)
+			assert.Contains(t, gotURL, "range="+tc.value)
+			assert.Contains(t, gotURL, "interval=1d")
+			assert.NotContains(t, gotURL, "includePrePost=true")
+		})
+	}
 }
 
 func TestFetchQuoteRangeNoDataDoesNotFallBackToLastSession(t *testing.T) {
@@ -558,6 +570,34 @@ func TestFetchQuoteLiveYTD(t *testing.T) {
 	assert.Greater(t, len(quote.Points), 10)
 	assert.True(t, quote.MultiDay())
 	assert.False(t, quote.HasExtendedHours())
+}
+
+func TestFetchQuoteLive2Y(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := NewClient().FetchQuoteRange("NOW", Range2Y)
+	require.NoError(t, err)
+	assert.Equal(t, "NOW", quote.Symbol)
+	assert.Equal(t, Range2Y, quote.Range)
+	assert.Greater(t, quote.Price, 0.0)
+	assert.Greater(t, len(quote.Points), 200)
+	assert.True(t, quote.MultiDay())
+	assert.Equal(t, "2Y", quote.SessionLabel())
+}
+
+func TestFetchQuoteLive5Y(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := NewClient().FetchQuoteRange("NOW", Range5Y)
+	require.NoError(t, err)
+	assert.Equal(t, "NOW", quote.Symbol)
+	assert.Equal(t, Range5Y, quote.Range)
+	assert.Greater(t, quote.Price, 0.0)
+	assert.Greater(t, len(quote.Points), 400)
+	assert.True(t, quote.MultiDay())
+	assert.Equal(t, "5Y", quote.SessionLabel())
 }
 
 func TestLastSessionFiltersOlderDays(t *testing.T) {
