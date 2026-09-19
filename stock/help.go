@@ -13,7 +13,7 @@ const helpMessage = `I watch for messages that are **only** a stock ticker and r
 - Send a ticker by itself: ` + "`$NOW`" + `, ` + "`$AAPL`" + `, or ` + "`$BRK.B`" + `
 - Crypto spot pairs work too: ` + "`$BTC`" + `, ` + "`$BTC-USD`" + `, ` + "`$ETH-USD`" + `
 - Yahoo index tickers keep the caret: ` + "`$^TNX`" + `, ` + "`$^GSPC`" + `, ` + "`$^VIX`" + `
-- Add a range after the ticker: ` + "`$NOW YTD`" + `, ` + "`$AAPL 1M`" + `, or ` + "`$BTC 5D`" + `
+- Add a range after the ticker: ` + "`$NOW YTD`" + `, ` + "`$AAPL 2Y`" + `, or ` + "`$BTC 5Y`" + `
 - Ranges: ` + quoteRangeOptions + ` (case insensitive)
 - Without a range I'll show today's price, today's dollar and percent change, and a 1-minute chart (premarket, regular hours, and after hours for stocks; 24h for crypto)
 - With a range I'll show the current price, change over that window, and a chart of the range

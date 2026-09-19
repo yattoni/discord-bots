@@ -158,13 +158,15 @@ func TestFormatQuoteTextRange(t *testing.T) {
 }
 
 func TestUnknownRangeReply(t *testing.T) {
-	got := unknownRangeReply("NOW", "2Y")
-	assert.Contains(t, got, "I don't recognize `2Y`")
+	got := unknownRangeReply("NOW", "10Y")
+	assert.Contains(t, got, "I don't recognize `10Y`")
 	assert.Contains(t, got, "`5D`")
 	assert.Contains(t, got, "`1M`")
 	assert.Contains(t, got, "`3M`")
 	assert.Contains(t, got, "`6M`")
 	assert.Contains(t, got, "`1Y`")
+	assert.Contains(t, got, "`2Y`")
+	assert.Contains(t, got, "`5Y`")
 	assert.Contains(t, got, "`YTD`")
 	assert.Contains(t, got, "`$NOW YTD`")
 	assert.Contains(t, got, "today's session")
@@ -173,6 +175,8 @@ func TestUnknownRangeReply(t *testing.T) {
 func TestQuoteFileName(t *testing.T) {
 	assert.Equal(t, "NOW.png", quoteFileName(&yahoo.Quote{Symbol: "NOW"}))
 	assert.Equal(t, "NOW-YTD.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.RangeYTD}))
+	assert.Equal(t, "NOW-2Y.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.Range2Y}))
+	assert.Equal(t, "NOW-5Y.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.Range5Y}))
 	assert.Equal(t, "^TNX.png", quoteFileName(&yahoo.Quote{Symbol: "^TNX"}))
 	assert.Equal(t, "^TNX-YTD.png", quoteFileName(&yahoo.Quote{Symbol: "^TNX", Range: yahoo.RangeYTD}))
 }
