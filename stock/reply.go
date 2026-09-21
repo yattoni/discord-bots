@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/yattoni/discord-bots/stock/quoteimg"
 	"github.com/yattoni/discord-bots/stock/yahoo"
 )
 
@@ -64,19 +65,7 @@ func formatPriceChangeLine(price, change, pct float64, currency string, hint int
 }
 
 func formatMoneyText(amount float64, currency string, hint int, index bool) string {
-	number := fmt.Sprintf("%.*f", hint, amount)
-	if index {
-		return number
-	}
-	switch strings.ToUpper(currency) {
-	case "", "USD":
-		if amount < 0 {
-			return "-$" + fmt.Sprintf("%.*f", hint, -amount)
-		}
-		return "$" + number
-	default:
-		return number + " " + currency
-	}
+	return quoteimg.FormatMoney(amount, currency, hint, index)
 }
 
 func unknownRangeReply(ticker, extra string) string {

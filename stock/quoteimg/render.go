@@ -130,7 +130,7 @@ func drawHeader(dc *gg.Context, quote *yahoo.Quote, accent color.Color, up bool)
 	}
 	dc.DrawString(name, 40+symbolWidth+14, 58)
 
-	priceText := formatMoney(quote.Price, quote.Currency, quote.PriceHint, quote.IsIndex())
+	priceText := FormatMoney(quote.Price, quote.Currency, quote.PriceHint, quote.IsIndex())
 	dc.SetFontFace(priceFace)
 	dc.SetColor(textPrimary)
 	dc.DrawString(priceText, 40, 118)
@@ -161,7 +161,7 @@ func drawHeader(dc *gg.Context, quote *yahoo.Quote, accent color.Color, up bool)
 		dc.DrawString("Close", 40, 148)
 		closeLabelW, _ := dc.MeasureString("Close")
 
-		closePrice := formatMoney(quote.RegularPrice, quote.Currency, quote.PriceHint, quote.IsIndex())
+		closePrice := FormatMoney(quote.RegularPrice, quote.Currency, quote.PriceHint, quote.IsIndex())
 		dc.SetFontFace(closeFace)
 		dc.SetColor(textPrimary)
 		dc.DrawString(closePrice, 40+closeLabelW+10, 150)
@@ -186,7 +186,7 @@ func formatChange(change, pct float64, currency string, hint int, index, up bool
 	}
 	return fmt.Sprintf("%s%s  (%s%s%%)",
 		sign,
-		formatMoney(change, currency, hint, index),
+		FormatMoney(change, currency, hint, index),
 		sign,
 		formatNumber(pct, 2),
 	)
@@ -561,7 +561,8 @@ func location(name string) *time.Location {
 	return loc
 }
 
-func formatMoney(amount float64, currency string, hint int, index bool) string {
+// FormatMoney renders a price with thousands separators, matching the quote card.
+func FormatMoney(amount float64, currency string, hint int, index bool) string {
 	number := formatNumber(amount, hint)
 	if index {
 		return number
@@ -581,7 +582,36 @@ func formatNumber(amount float64, hint int) string {
 	if hint <= 0 {
 		hint = 2
 	}
-	return fmt.Sprintf("%.*f", hint, amount)
+	return addThousandsSeparators(fmt.Sprintf("%.*f", hint, amount))
+}
+
+func addThousandsSeparators(s string) string {
+	sign := ""
+	if strings.HasPrefix(s, "-") {
+		sign = "-"
+		s = s[1:]
+	}
+	intPart, frac, hasDot := strings.Cut(s, ".")
+	if len(intPart) <= 3 {
+		return sign + s
+	}
+	var b strings.Builder
+	b.Grow(len(sign) + len(s) + len(intPart)/3)
+	b.WriteString(sign)
+	lead := len(intPart) % 3
+	if lead == 0 {
+		lead = 3
+	}
+	b.WriteString(intPart[:lead])
+	for i := lead; i < len(intPart); i += 3 {
+		b.WriteByte(',')
+		b.WriteString(intPart[i : i+3])
+	}
+	if hasDot {
+		b.WriteByte('.')
+		b.WriteString(frac)
+	}
+	return b.String()
 }
 
 // DecodeSize reports PNG dimensions for tests.

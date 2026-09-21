@@ -333,8 +333,8 @@ func TestRenderPNGIndex(t *testing.T) {
 	require.True(t, quote.IsIndex())
 	require.False(t, quote.HasExtendedHours())
 	assert.Equal(t, "Market hours", quote.SessionLabel())
-	assert.Equal(t, "4.9610", formatMoney(4.961, "USD", 4, true))
-	assert.Equal(t, "-0.0140", formatMoney(-0.014, "USD", 4, true))
+	assert.Equal(t, "4.9610", FormatMoney(4.961, "USD", 4, true))
+	assert.Equal(t, "-0.0140", FormatMoney(-0.014, "USD", 4, true))
 	assert.Equal(t, "Yahoo Finance", sourceLabel(quote))
 	pngBytes, err := RenderPNG(quote)
 	require.NoError(t, err)
@@ -343,6 +343,24 @@ func TestRenderPNGIndex(t *testing.T) {
 	assert.Equal(t, width, cfg.Width)
 	assert.Equal(t, height, cfg.Height)
 	assert.True(t, hasColorNear(t, pngBytes, redColor))
+}
+
+func TestFormatMoneyThousands(t *testing.T) {
+	assert.Equal(t, "$85,186.00", FormatMoney(85186, "USD", 2, false))
+	assert.Equal(t, "$1,234,567.89", FormatMoney(1234567.89, "USD", 2, false))
+	assert.Equal(t, "-$4,190.08", FormatMoney(-4190.08, "USD", 2, false))
+	assert.Equal(t, "$144.92", FormatMoney(144.92, "USD", 2, false))
+	assert.Equal(t, "$999.99", FormatMoney(999.99, "USD", 2, false))
+	assert.Equal(t, "$1,000.00", FormatMoney(1000, "USD", 2, false))
+	assert.Equal(t, "5,664.18", FormatMoney(5664.18, "USD", 2, true))
+	assert.Equal(t, "81,500.2500 JPY", FormatMoney(81500.25, "JPY", 4, false))
+}
+
+func TestFormatNumberThousands(t *testing.T) {
+	assert.Equal(t, "85,186.00", formatNumber(85186, 2))
+	assert.Equal(t, "-1,234.50", formatNumber(-1234.5, 2))
+	assert.Equal(t, "0.50", formatNumber(0.5, 2))
+	assert.Equal(t, "4.9610", formatNumber(4.961, 4))
 }
 
 func TestRenderPNGLive(t *testing.T) {
