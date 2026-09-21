@@ -118,8 +118,24 @@ func TestFormatQuoteTextCrypto(t *testing.T) {
 		LastTradeTime:  time.Unix(10800, 0).UTC(),
 	})
 	assert.Contains(t, got, "**BTC-USD** · Bitcoin USD")
-	assert.Contains(t, got, "$81500.25")
+	assert.Contains(t, got, "$81,500.25")
 	assert.Contains(t, got, "24h")
+}
+
+func TestFormatQuoteTextThousands(t *testing.T) {
+	got := formatQuoteText(&yahoo.Quote{
+		Symbol:         "BTC-USD",
+		ShortName:      "Bitcoin USD",
+		Currency:       "USD",
+		InstrumentType: "CRYPTOCURRENCY",
+		Price:          85186,
+		Change:         1234.5,
+		ChangePercent:  1.47,
+		PriceHint:      2,
+	})
+	assert.Contains(t, got, "$85,186.00")
+	assert.Contains(t, got, "+$1,234.50")
+	assert.NotContains(t, got, "$85186")
 }
 
 func TestFormatQuoteTextIndex(t *testing.T) {
