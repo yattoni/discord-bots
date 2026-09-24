@@ -13,7 +13,7 @@ import (
 // Yahoo index and treasury symbols keep their caret prefix (e.g. ^TNX, ^GSPC, ^VIX).
 var tickerPrefixPattern = regexp.MustCompile(`(?i)^\$(\^[A-Z]{1,5}|[A-Z]{1,5}(?:\.[A-Z]|-[A-Z]{1,4})?)(?:\s+(.*))?$`)
 
-const quoteRangeOptions = "`5D`, `1M`, `3M`, `6M`, `1Y`, `2Y`, `5Y`, or `YTD`"
+const quoteRangeOptions = "`5D`, `1W`, `2W`, `1M`, `3M`, `6M`, `1Y`, `2Y`, `5Y`, or `YTD`"
 
 // tickerAliases maps shorthand symbols to the Yahoo Finance quote we actually fetch.
 // $BTC is Bitcoin spot, not the Grayscale Mini Trust ETF that Yahoo lists as BTC.

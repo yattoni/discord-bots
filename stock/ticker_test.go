@@ -38,6 +38,8 @@ func TestParseQuoteRequest(t *testing.T) {
 		{name: "ytd range", message: "$NOW YTD", ticker: "NOW", rng: yahoo.RangeYTD, ok: true},
 		{name: "lowercase ytd", message: "$now ytd", ticker: "NOW", rng: yahoo.RangeYTD, ok: true},
 		{name: "mixed case range", message: "$AAPL 5d", ticker: "AAPL", rng: yahoo.Range5D, ok: true},
+		{name: "one week", message: "$NOW 1W", ticker: "NOW", rng: yahoo.Range1W, ok: true},
+		{name: "two weeks lowercase", message: "$aapl 2w", ticker: "AAPL", rng: yahoo.Range2W, ok: true},
 		{name: "one month", message: "$F 1M", ticker: "F", rng: yahoo.Range1M, ok: true},
 		{name: "three months", message: "$BRK.B 3m", ticker: "BRK.B", rng: yahoo.Range3M, ok: true},
 		{name: "six months", message: "$BTC 6M", ticker: "BTC-USD", rng: yahoo.Range6M, ok: true},
@@ -82,10 +84,12 @@ func TestUnknownRangeAfterTicker(t *testing.T) {
 		ok     bool
 	}{
 		{name: "unsupported token", in: "$NOW 10Y", ticker: "NOW", extra: "10Y", ok: true},
-		{name: "lowercase unknown", in: "$aapl 1w", ticker: "AAPL", extra: "1w", ok: true},
+		{name: "lowercase unknown", in: "$aapl 3w", ticker: "AAPL", extra: "3w", ok: true},
 		{name: "phrase after ticker", in: "$NOW last week", ticker: "NOW", extra: "last week", ok: true},
 		{name: "bitcoin alias", in: "$btc 10y", ticker: "BTC-USD", extra: "10y", ok: true},
 		{name: "caret index unknown range", in: "$^TNX 10Y", ticker: "^TNX", extra: "10Y", ok: true},
+		{name: "valid one week is not unknown", in: "$NOW 1W", ok: false},
+		{name: "valid two weeks is not unknown", in: "$AAPL 2W", ok: false},
 		{name: "valid two year is not unknown", in: "$NOW 2Y", ok: false},
 		{name: "valid five year is not unknown", in: "$AAPL 5Y", ok: false},
 		{name: "valid ytd is not unknown", in: "$NOW YTD", ok: false},
@@ -131,6 +135,16 @@ func TestParsePreviewArg(t *testing.T) {
 	assert.Equal(t, "^TNX", req.Ticker)
 	assert.Equal(t, yahoo.RangeYTD, req.Range)
 
+	req, ok = parsePreviewArg("NOW 1W")
+	assert.True(t, ok)
+	assert.Equal(t, "NOW", req.Ticker)
+	assert.Equal(t, yahoo.Range1W, req.Range)
+
+	req, ok = parsePreviewArg("$AAPL 2w")
+	assert.True(t, ok)
+	assert.Equal(t, "AAPL", req.Ticker)
+	assert.Equal(t, yahoo.Range2W, req.Range)
+
 	req, ok = parsePreviewArg("NOW 2Y")
 	assert.True(t, ok)
 	assert.Equal(t, "NOW", req.Ticker)
@@ -160,6 +174,8 @@ func TestQuoteRequestCacheKey(t *testing.T) {
 	assert.Equal(t, "NOW", quoteRequest{Ticker: "NOW"}.cacheKey())
 	assert.Equal(t, "NOW:YTD", quoteRequest{Ticker: "NOW", Range: yahoo.RangeYTD}.cacheKey())
 	assert.Equal(t, "$NOW YTD", quoteRequest{Ticker: "NOW", Range: yahoo.RangeYTD}.logLabel())
+	assert.Equal(t, "NOW:1W", quoteRequest{Ticker: "NOW", Range: yahoo.Range1W}.cacheKey())
+	assert.Equal(t, "$NOW 2W", quoteRequest{Ticker: "NOW", Range: yahoo.Range2W}.logLabel())
 	assert.Equal(t, "NOW:2Y", quoteRequest{Ticker: "NOW", Range: yahoo.Range2Y}.cacheKey())
 	assert.Equal(t, "$NOW 5Y", quoteRequest{Ticker: "NOW", Range: yahoo.Range5Y}.logLabel())
 	assert.Equal(t, "^TNX", quoteRequest{Ticker: "^TNX"}.cacheKey())

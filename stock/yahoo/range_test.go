@@ -16,6 +16,10 @@ func TestParseRange(t *testing.T) {
 		{in: "  ", want: RangeToday, ok: true},
 		{in: "5D", want: Range5D, ok: true},
 		{in: "5d", want: Range5D, ok: true},
+		{in: "1W", want: Range1W, ok: true},
+		{in: "1w", want: Range1W, ok: true},
+		{in: "2W", want: Range2W, ok: true},
+		{in: "2w", want: Range2W, ok: true},
 		{in: "1m", want: Range1M, ok: true},
 		{in: "3M", want: Range3M, ok: true},
 		{in: "6M", want: Range6M, ok: true},
@@ -42,6 +46,8 @@ func TestParseRange(t *testing.T) {
 func TestRangeSpec(t *testing.T) {
 	assert.Equal(t, chartSpec{rangeValue: "1d", interval: "1m", includePrePost: true}, RangeToday.spec())
 	assert.Equal(t, chartSpec{rangeValue: "5d", interval: "15m"}, Range5D.spec())
+	assert.Equal(t, chartSpec{rangeValue: "1wk", interval: "15m"}, Range1W.spec())
+	assert.Equal(t, chartSpec{rangeValue: "2wk", interval: "15m"}, Range2W.spec())
 	assert.Equal(t, chartSpec{rangeValue: "1mo", interval: "15m"}, Range1M.spec())
 	assert.Equal(t, chartSpec{rangeValue: "3mo", interval: "1d"}, Range3M.spec())
 	assert.Equal(t, chartSpec{rangeValue: "6mo", interval: "1d"}, Range6M.spec())

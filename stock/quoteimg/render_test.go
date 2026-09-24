@@ -377,6 +377,36 @@ func TestRenderPNGLive(t *testing.T) {
 	assert.Equal(t, height, cfg.Height)
 }
 
+func TestRenderPNGLive1W(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := yahoo.NewClient().FetchQuoteRange("NOW", yahoo.Range1W)
+	require.NoError(t, err)
+	assert.Equal(t, "1W", quote.SessionLabel())
+	pngBytes, err := RenderPNG(quote)
+	require.NoError(t, err)
+	cfg, err := DecodeSize(pngBytes)
+	require.NoError(t, err)
+	assert.Equal(t, width, cfg.Width)
+	assert.Equal(t, height, cfg.Height)
+}
+
+func TestRenderPNGLive2W(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := yahoo.NewClient().FetchQuoteRange("NOW", yahoo.Range2W)
+	require.NoError(t, err)
+	assert.Equal(t, "2W", quote.SessionLabel())
+	pngBytes, err := RenderPNG(quote)
+	require.NoError(t, err)
+	cfg, err := DecodeSize(pngBytes)
+	require.NoError(t, err)
+	assert.Equal(t, width, cfg.Width)
+	assert.Equal(t, height, cfg.Height)
+}
+
 func TestRenderPNGLiveYTD(t *testing.T) {
 	if os.Getenv("SKIP_LIVE") != "" {
 		t.Skip("live Yahoo Finance test disabled")
