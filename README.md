@@ -10,7 +10,7 @@ A websocket Discord bot that watches for messages that are only a ticker, like `
 - dollar and percent change for today, or over the requested range (green up / red down)
 - chart of today's session or the requested range (green above the baseline, red below)
 
-Tickers are 1–5 letters, with an optional share class (`$BRK.B`), crypto pair (`$BTC-USD`), or Yahoo index caret (`$^TNX`, `$^GSPC`, `$^VIX`). Optionally add a range after the ticker: `5D`, `1M`, `3M`, `6M`, `1Y`, `2Y`, `5Y`, or `YTD` (case insensitive). `$NOW` still shows today's session. An unrecognized range after the ticker gets a reply listing those options. Other extra text around the ticker is ignored.
+Tickers are 1–5 letters, with an optional share class (`$BRK.B`), crypto pair (`$BTC-USD`), or Yahoo index caret (`$^TNX`, `$^GSPC`, `$^VIX`). Optionally add a range after the ticker: `5D`, `1W`, `2W`, `1M`, `3M`, `6M`, `1Y`, `2Y`, `5Y`, or `YTD` (case insensitive). `$NOW` still shows today's session. An unrecognized range after the ticker gets a reply listing those options. Other extra text around the ticker is ignored.
 
 `$BTC` is treated as Bitcoin spot (`BTC-USD`). Other crypto pairs use Yahoo's hyphenated names, like `$ETH-USD`. Index and treasury quotes use Yahoo's caret symbols, like `$^TNX` for the 10-year yield.
 
@@ -44,6 +44,8 @@ Preview a quote image without Discord:
 
 ```sh
 go run ./stock -preview NOW -out now.png
+go run ./stock -preview "NOW 1W" -out now-1w.png
+go run ./stock -preview "NOW 2W" -out now-2w.png
 go run ./stock -preview "NOW YTD" -out now-ytd.png
 go run ./stock -preview "NOW 2Y" -out now-2y.png
 go run ./stock -preview "NOW 5Y" -out now-5y.png

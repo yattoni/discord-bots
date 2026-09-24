@@ -497,12 +497,15 @@ func TestParseChartRangeIgnoresTodayChange(t *testing.T) {
 
 func TestFetchQuoteRangeUsesYahooWindow(t *testing.T) {
 	cases := []struct {
-		rng   Range
-		value string
+		rng      Range
+		value    string
+		interval string
 	}{
-		{rng: RangeYTD, value: "ytd"},
-		{rng: Range2Y, value: "2y"},
-		{rng: Range5Y, value: "5y"},
+		{rng: Range1W, value: "1wk", interval: "15m"},
+		{rng: Range2W, value: "2wk", interval: "15m"},
+		{rng: RangeYTD, value: "ytd", interval: "1d"},
+		{rng: Range2Y, value: "2y", interval: "1d"},
+		{rng: Range5Y, value: "5y", interval: "1d"},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.rng), func(t *testing.T) {
@@ -520,7 +523,7 @@ func TestFetchQuoteRangeUsesYahooWindow(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.rng, quote.Range)
 			assert.Contains(t, gotURL, "range="+tc.value)
-			assert.Contains(t, gotURL, "interval=1d")
+			assert.Contains(t, gotURL, "interval="+tc.interval)
 			assert.NotContains(t, gotURL, "includePrePost=true")
 		})
 	}
@@ -556,6 +559,34 @@ func TestFetchQuoteRangeNoDataDoesNotFallBackToLastSession(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrNoData)
 	assert.Equal(t, 1, requests)
+}
+
+func TestFetchQuoteLive1W(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := NewClient().FetchQuoteRange("NOW", Range1W)
+	require.NoError(t, err)
+	assert.Equal(t, "NOW", quote.Symbol)
+	assert.Equal(t, Range1W, quote.Range)
+	assert.Greater(t, quote.Price, 0.0)
+	assert.Greater(t, len(quote.Points), 20)
+	assert.True(t, quote.MultiDay())
+	assert.Equal(t, "1W", quote.SessionLabel())
+}
+
+func TestFetchQuoteLive2W(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("live Yahoo Finance test disabled")
+	}
+	quote, err := NewClient().FetchQuoteRange("NOW", Range2W)
+	require.NoError(t, err)
+	assert.Equal(t, "NOW", quote.Symbol)
+	assert.Equal(t, Range2W, quote.Range)
+	assert.Greater(t, quote.Price, 0.0)
+	assert.Greater(t, len(quote.Points), 40)
+	assert.True(t, quote.MultiDay())
+	assert.Equal(t, "2W", quote.SessionLabel())
 }
 
 func TestFetchQuoteLiveYTD(t *testing.T) {

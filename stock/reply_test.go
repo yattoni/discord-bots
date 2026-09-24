@@ -177,6 +177,8 @@ func TestUnknownRangeReply(t *testing.T) {
 	got := unknownRangeReply("NOW", "10Y")
 	assert.Contains(t, got, "I don't recognize `10Y`")
 	assert.Contains(t, got, "`5D`")
+	assert.Contains(t, got, "`1W`")
+	assert.Contains(t, got, "`2W`")
 	assert.Contains(t, got, "`1M`")
 	assert.Contains(t, got, "`3M`")
 	assert.Contains(t, got, "`6M`")
@@ -191,6 +193,8 @@ func TestUnknownRangeReply(t *testing.T) {
 func TestQuoteFileName(t *testing.T) {
 	assert.Equal(t, "NOW.png", quoteFileName(&yahoo.Quote{Symbol: "NOW"}))
 	assert.Equal(t, "NOW-YTD.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.RangeYTD}))
+	assert.Equal(t, "NOW-1W.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.Range1W}))
+	assert.Equal(t, "NOW-2W.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.Range2W}))
 	assert.Equal(t, "NOW-2Y.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.Range2Y}))
 	assert.Equal(t, "NOW-5Y.png", quoteFileName(&yahoo.Quote{Symbol: "NOW", Range: yahoo.Range5Y}))
 	assert.Equal(t, "^TNX.png", quoteFileName(&yahoo.Quote{Symbol: "^TNX"}))
