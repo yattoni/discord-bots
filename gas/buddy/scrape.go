@@ -69,13 +69,13 @@ func NewCloudflareFromEnv() (*Cloudflare, error) {
 }
 
 type scrapeRequest struct {
-	URL                 string             `json:"url"`
-	Elements            []scrapeSelector   `json:"elements"`
-	GotoOptions         scrapeGotoOptions  `json:"gotoOptions"`
-	WaitForSelector     scrapeWaitSelector `json:"waitForSelector"`
-	BestAttempt         bool               `json:"bestAttempt"`
-	ActionTimeout       int                `json:"actionTimeout"`
-	RejectResourceTypes []string           `json:"rejectResourceTypes"`
+	URL                 string              `json:"url"`
+	Elements            []scrapeSelector    `json:"elements"`
+	GotoOptions         *scrapeGotoOptions  `json:"gotoOptions,omitempty"`
+	WaitForSelector     *scrapeWaitSelector `json:"waitForSelector,omitempty"`
+	BestAttempt         bool                `json:"bestAttempt,omitempty"`
+	ActionTimeout       int                 `json:"actionTimeout,omitempty"`
+	RejectResourceTypes []string            `json:"rejectResourceTypes,omitempty"`
 }
 
 type scrapeSelector struct {
@@ -83,14 +83,14 @@ type scrapeSelector struct {
 }
 
 type scrapeGotoOptions struct {
-	WaitUntil string `json:"waitUntil"`
-	Timeout   int    `json:"timeout"`
+	WaitUntil string `json:"waitUntil,omitempty"`
+	Timeout   int    `json:"timeout,omitempty"`
 }
 
 type scrapeWaitSelector struct {
-	Selector string `json:"selector"`
-	Visible  bool   `json:"visible"`
-	Timeout  int    `json:"timeout"`
+	Selector string `json:"selector,omitempty"`
+	Visible  bool   `json:"visible,omitempty"`
+	Timeout  int    `json:"timeout,omitempty"`
 }
 
 type scrapeAPIError struct {
@@ -101,7 +101,7 @@ type scrapeAPIError struct {
 type scrapeEnvelope struct {
 	Success bool             `json:"success"`
 	Errors  []scrapeAPIError `json:"errors"`
-	Result  []selectorResult `json:"result"`
+	Result  selectorResults  `json:"result"`
 	Meta    scrapeMeta       `json:"meta"`
 }
 
@@ -116,6 +116,36 @@ type scrapeMeta struct {
 type selectorResult struct {
 	Selector string      `json:"selector"`
 	Results  elementHits `json:"results"`
+}
+
+// selectorResults accepts the documented array and a single-object result.
+type selectorResults []selectorResult
+
+func (r *selectorResults) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || string(data) == "null" {
+		*r = nil
+		return nil
+	}
+	if data[0] == '[' {
+		var items []selectorResult
+		if err := json.Unmarshal(data, &items); err != nil {
+			return err
+		}
+		*r = items
+		return nil
+	}
+	var one selectorResult
+	if err := json.Unmarshal(data, &one); err != nil {
+		*r = nil
+		return nil
+	}
+	if strings.TrimSpace(one.Selector) == "" && len(one.Results) == 0 {
+		*r = nil
+		return nil
+	}
+	*r = selectorResults{one}
+	return nil
 }
 
 type elementHit struct {
@@ -162,11 +192,11 @@ func (c *Cloudflare) scrape(ctx context.Context, pageURL string) ([]selectorResu
 			{Selector: titleSelector},
 			{Selector: headlineSelector},
 		},
-		GotoOptions: scrapeGotoOptions{
+		GotoOptions: &scrapeGotoOptions{
 			WaitUntil: "networkidle2",
 			Timeout:   45000,
 		},
-		WaitForSelector: scrapeWaitSelector{
+		WaitForSelector: &scrapeWaitSelector{
 			Selector: priceReadySelector,
 			Visible:  true,
 			Timeout:  30000,
@@ -180,51 +210,58 @@ func (c *Cloudflare) scrape(ctx context.Context, pageURL string) ([]selectorResu
 		return nil, err
 	}
 
+	parsed, status, raw, header, err := c.doScrape(ctx, body)
+	if err != nil {
+		return nil, err
+	}
+
+	if status == http.StatusTooManyRequests {
+		return nil, rateLimitError(&http.Response{StatusCode: status, Header: header}, raw)
+	}
+
+	if !parsed.Success || len(parsed.Errors) > 0 {
+		msg := strings.TrimSpace(joinScrapeErrors(parsed.Errors))
+		if msg == "" {
+			msg = strings.TrimSpace(string(raw))
+		}
+		if status < 400 && len(parsed.Errors) > 0 && parsed.Errors[0].Code != 0 {
+			status = parsed.Errors[0].Code
+		}
+		return nil, classifyScrapeStatus(status, msg)
+	}
+	if status >= 400 {
+		return nil, classifyScrapeStatus(status, strings.TrimSpace(string(raw)))
+	}
+	if blocked, detail := destinationBlocked(parsed); blocked {
+		return nil, fmt.Errorf("%w: %s", ErrUnavailable, detail)
+	}
+	return parsed.Result, nil
+}
+
+func (c *Cloudflare) doScrape(ctx context.Context, body []byte) (scrapeEnvelope, int, []byte, http.Header, error) {
+	var parsed scrapeEnvelope
 	endpoint := strings.TrimRight(c.baseURL, "/") + fmt.Sprintf(scrapePath, c.accountID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return parsed, 0, nil, nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.apiToken)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+		return parsed, 0, nil, nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	defer resp.Body.Close()
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
-		return nil, fmt.Errorf("%w: read response: %v", ErrUnavailable, err)
+		return parsed, resp.StatusCode, nil, resp.Header.Clone(), fmt.Errorf("%w: read response: %v", ErrUnavailable, err)
 	}
-
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, rateLimitError(resp, raw)
-	}
-
-	var parsed scrapeEnvelope
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, classifyScrapeStatus(resp.StatusCode, fmt.Sprintf("decode response: %v", err))
+		return parsed, resp.StatusCode, raw, resp.Header.Clone(), fmt.Errorf("%w: decode response: %v", ErrUnavailable, err)
 	}
-	if !parsed.Success || len(parsed.Errors) > 0 {
-		msg := strings.TrimSpace(joinScrapeErrors(parsed.Errors))
-		if msg == "" {
-			msg = strings.TrimSpace(string(raw))
-		}
-		status := resp.StatusCode
-		if status < 400 && len(parsed.Errors) > 0 && parsed.Errors[0].Code != 0 {
-			status = parsed.Errors[0].Code
-		}
-		return nil, classifyScrapeStatus(status, msg)
-	}
-	if resp.StatusCode >= 400 {
-		return nil, classifyScrapeStatus(resp.StatusCode, strings.TrimSpace(string(raw)))
-	}
-	if blocked, detail := destinationBlocked(parsed); blocked {
-		return nil, fmt.Errorf("%w: %s", ErrUnavailable, detail)
-	}
-	return parsed.Result, nil
+	return parsed, resp.StatusCode, raw, resp.Header.Clone(), nil
 }
 
 func destinationBlocked(parsed scrapeEnvelope) (bool, string) {
