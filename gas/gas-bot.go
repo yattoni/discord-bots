@@ -15,26 +15,25 @@ import (
 
 func runOnce() {
 	ctx := context.Background()
-	client, err := buddy.NewClient()
+	scraper, err := buddy.NewCloudflareFromEnv()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	national := aaa.GetNationalAverages()
-	la, err := buddy.GetFromGasBuddy(ctx, client, "https://www.gasbuddy.com/station/10870", "Los Angeles")
+	la, err := buddy.GetFromGasBuddy(ctx, scraper, "https://www.gasbuddy.com/station/10870", "Los Angeles")
 	if err != nil {
 		log.Fatal(err)
 	}
-	chicago, err := buddy.GetFromGasBuddy(ctx, client, "https://www.gasbuddy.com/station/5355", "Chicago")
+	chicago, err := buddy.GetFromGasBuddy(ctx, scraper, "https://www.gasbuddy.com/station/5355", "Chicago")
 	if err != nil {
 		log.Fatal(err)
 	}
 	// casesys := getGasBuddy("https://www.gasbuddy.com/station/145394", "At Casey's in Jacksonville")
-	stl, err := buddy.GetFromGasBuddy(ctx, client, "https://www.gasbuddy.com/station/14993", "At Jones's QT")
+	stl, err := buddy.GetFromGasBuddy(ctx, scraper, "https://www.gasbuddy.com/station/14993", "At Jones's QT")
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	message := fmt.Sprintf("%s\n%s\n%s\n%s", national, la, chicago, stl)
 	webhookURL := strings.TrimSpace(os.Getenv("WEBHOOK_URL"))
 	if webhookURL == "" {
