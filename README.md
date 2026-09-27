@@ -6,24 +6,22 @@ Discord bots that fetch and post earthquakes, gas prices, and stock quotes.
 
 A scheduled AWS Lambda that posts AAA national averages plus a few GasBuddy station prices to a Discord webhook.
 
-GasBuddy sits behind Cloudflare and fills in prices with JavaScript after load, so a plain `http.Get` either hits a challenge or returns spinner HTML. Station pages are fetched with [Cloudflare Browser Run `/scrape`](https://developers.cloudflare.com/browser-run/quick-actions/scrape-endpoint/): a headless browser waits until the price nodes are rendered, then extracts Regular, Midgrade, and Premium.
+GasBuddy fills prices in with JavaScript after load, so the HTML from a plain `http.Get` still has spinner nodes. The bot GETs a station page for the `gbcsrf` cookie, then queries GasBuddy's `GetStation` GraphQL operation for Regular, Midgrade, and Premium.
 
-### Cloudflare setup
-
-1. In the [Cloudflare dashboard](https://dash.cloudflare.com/), copy the account ID
-2. Create an API token with **Browser Rendering - Edit** (Account)
-3. On the Lambda, set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` next to the existing `WEBHOOK_URL`
-4. Give the function at least **3 minutes** to run — each station scrape can take tens of seconds
-
-Workers Free allows 10 minutes of browser time per day and 1 Quick Action every 10 seconds, which is enough for this bot's three stations. Workers Paid raises those limits if you add more stations.
+[Cloudflare Browser Run `/scrape`](https://developers.cloudflare.com/browser-run/quick-actions/scrape-endpoint/) cannot be used here. Browser Run always identifies as a bot, and GasBuddy's WAF returns 403 (`Sorry, you have been blocked`) instead of the station page.
 
 ### Run
 
 ```sh
+# optional: post to Discord. Without this the bot prints the message and exits.
 export WEBHOOK_URL=https://discord.com/api/webhooks/...
-export CLOUDFLARE_ACCOUNT_ID=your-account-id
-export CLOUDFLARE_API_TOKEN=your-api-token
 go run ./gas
+```
+
+Live GraphQL check (no webhook):
+
+```sh
+go test ./gas/buddy/ -run TestLiveGasBuddyPrices -count=1
 ```
 
 Outside Lambda this runs once and exits. Package with `./package-gas-bot.sh`.
