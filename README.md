@@ -6,7 +6,9 @@ Discord bots that fetch and post earthquakes, gas prices, and stock quotes.
 
 A scheduled AWS Lambda that posts AAA national averages plus a few GasBuddy station prices to a Discord webhook.
 
-GasBuddy sits behind Cloudflare and fills in prices with JavaScript after load, so a plain `http.Get` either hits a challenge or returns spinner HTML. Station pages are fetched with [Cloudflare Browser Run `/scrape`](https://developers.cloudflare.com/browser-run/quick-actions/scrape-endpoint/): a headless browser waits until the price nodes are rendered, then extracts Regular, Midgrade, and Premium.
+GasBuddy sits behind Cloudflare and fills in prices with JavaScript after load, so a plain `http.Get` from Lambda either hits a bot challenge or returns spinner HTML. Station pages are fetched with [Cloudflare Browser Run `/scrape`](https://developers.cloudflare.com/browser-run/quick-actions/scrape-endpoint/): a headless browser waits until the price nodes are rendered, then extracts Regular, Midgrade, and Premium.
+
+Browser Run is always identified as a bot to the destination (non-configurable `Signature` headers). If GasBuddy's WAF blocks those browsers, the scrape errors instead of posting empty prices.
 
 ### Cloudflare setup
 
@@ -20,10 +22,17 @@ Workers Free allows 10 minutes of browser time per day and 1 Quick Action every 
 ### Run
 
 ```sh
+# optional: post to Discord. Without this the bot prints the message and exits.
 export WEBHOOK_URL=https://discord.com/api/webhooks/...
 export CLOUDFLARE_ACCOUNT_ID=your-account-id
 export CLOUDFLARE_API_TOKEN=your-api-token
 go run ./gas
+```
+
+Live scrape check:
+
+```sh
+go test ./gas/buddy/ -run TestLiveGasBuddyScrape -count=1
 ```
 
 Outside Lambda this runs once and exits. Package with `./package-gas-bot.sh`.

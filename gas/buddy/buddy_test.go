@@ -65,7 +65,14 @@ func TestScrapeSuccess(t *testing.T) {
 	assert.Equal(t, "Bearer test-token", gotAuth)
 	assert.Equal(t, "/accounts/acct-123/browser-rendering/scrape", gotPath)
 	assert.Equal(t, "https://www.gasbuddy.com/station/10870", gotBody.URL)
-	assert.Equal(t, []scrapeSelector{{Selector: labelSelector}, {Selector: priceSelector}}, gotBody.Elements)
+	assert.Equal(t, []scrapeSelector{
+		{Selector: labelSelector},
+		{Selector: priceSelector},
+		{Selector: titleSelector},
+		{Selector: headlineSelector},
+	}, gotBody.Elements)
+	require.NotNil(t, gotBody.GotoOptions)
+	require.NotNil(t, gotBody.WaitForSelector)
 	assert.Equal(t, "networkidle2", gotBody.GotoOptions.WaitUntil)
 	assert.Equal(t, priceReadySelector, gotBody.WaitForSelector.Selector)
 	assert.True(t, gotBody.BestAttempt)
@@ -179,6 +186,30 @@ func TestParseStationPricesFallbackOrder(t *testing.T) {
 	assert.Equal(t, stationPrices{Regular: "$4.10", Mid: "$4.30", Premium: "$4.50"}, prices)
 }
 
+func TestScrapeDestinationBlocked(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{
+		  "success": true,
+		  "meta": {"status": 403, "title": "Attention Required! | Cloudflare", "finalUrl": "https://www.gasbuddy.com/station/10870"},
+		  "result": [
+		    {"selector": "title", "results": [{"text": "Attention Required! | Cloudflare"}]},
+		    {"selector": "h1", "results": [{"text": "Sorry, you have been blocked"}]},
+		    {"selector": "[class*=\"FuelTypePriceDisplay-module__price\"]", "results": []}
+		  ]
+		}`))
+	}))
+	defer srv.Close()
+
+	client := NewCloudflare("acct", "token")
+	client.baseURL = srv.URL
+	client.httpClient = srv.Client()
+
+	_, err := GetFromGasBuddy(context.Background(), client, "https://www.gasbuddy.com/station/10870", "Los Angeles")
+	assert.ErrorIs(t, err, ErrUnavailable)
+	assert.Contains(t, err.Error(), "403")
+	assert.NotErrorIs(t, err, ErrEmpty)
+}
+
 func TestParseStationPricesChallengePage(t *testing.T) {
 	_, err := parseStationPrices([]selectorResult{
 		{
@@ -203,10 +234,49 @@ func TestRateLimitErrorIncludesRetryAfter(t *testing.T) {
 	assert.Contains(t, err.Error(), "retry after 10s")
 }
 
+func TestSelectorResultsUnmarshalObject(t *testing.T) {
+	var results selectorResults
+	require.NoError(t, json.Unmarshal([]byte(`{"selector":"h1","results":{"text":"Example Domain"}}`), &results))
+	require.Len(t, results, 1)
+	assert.Equal(t, "h1", results[0].Selector)
+	assert.Equal(t, "Example Domain", results[0].Results[0].Text)
+
+	require.NoError(t, json.Unmarshal([]byte(`{}`), &results))
+	assert.Nil(t, results)
+}
+
 func TestElementHitsUnmarshalNull(t *testing.T) {
 	var hits elementHits
 	require.NoError(t, json.Unmarshal([]byte("null"), &hits))
 	assert.Nil(t, hits)
+}
+
+func TestLiveCloudflareControlScrape(t *testing.T) {
+	if os.Getenv("SKIP_LIVE") != "" {
+		t.Skip("SKIP_LIVE is set")
+	}
+	account := os.Getenv("CLOUDFLARE_ACCOUNT_ID")
+	token := os.Getenv("CLOUDFLARE_API_TOKEN")
+	if account == "" || token == "" {
+		t.Skip("CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN not set")
+	}
+
+	body, err := json.Marshal(scrapeRequest{
+		URL:      "https://example.com/",
+		Elements: []scrapeSelector{{Selector: "h1"}},
+	})
+	require.NoError(t, err)
+
+	parsed, status, raw, _, err := NewCloudflare(account, token).doScrape(context.Background(), body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "Cloudflare API rejected the Bearer token or account id: %s", string(raw))
+	require.True(t, parsed.Success, "Cloudflare API success=false: %s", string(raw))
+	require.Empty(t, parsed.Errors)
+	assert.Equal(t, http.StatusOK, parsed.Meta.Status)
+	require.NotEmpty(t, parsed.Result)
+	texts := textsFor(parsed.Result[0])
+	require.NotEmpty(t, texts)
+	assert.Contains(t, texts[0], "Example Domain")
 }
 
 func TestLiveGasBuddyScrape(t *testing.T) {

@@ -47,7 +47,7 @@ func parseStationPrices(results []selectorResult) (stationPrices, error) {
 		prices = textsFor(results[0])
 	}
 
-	if looksLikeChallenge(labels, prices) {
+	if looksLikeChallenge(labels, prices, allTexts(results)) {
 		return stationPrices{}, fmt.Errorf("%w: got a Cloudflare challenge page instead of station prices", ErrUnavailable)
 	}
 
@@ -134,16 +134,30 @@ func normalizeGrade(label string) string {
 	return label
 }
 
+func allTexts(results []selectorResult) []string {
+	out := make([]string, 0)
+	for _, result := range results {
+		out = append(out, textsFor(result)...)
+	}
+	return out
+}
+
 func looksLikeChallenge(groups ...[]string) bool {
 	for _, group := range groups {
 		for _, text := range group {
-			lower := strings.ToLower(text)
-			if strings.Contains(lower, "just a moment") || strings.Contains(lower, "attention required") {
+			if looksLikeChallengeText(text) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func looksLikeChallengeText(text string) bool {
+	lower := strings.ToLower(text)
+	return strings.Contains(lower, "just a moment") ||
+		strings.Contains(lower, "attention required") ||
+		strings.Contains(lower, "sorry, you have been blocked")
 }
 
 func normalizePrice(text string) string {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/yattoni/discord-bots/discord"
@@ -33,8 +34,14 @@ func runOnce() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	webhook := discord.NewWebhook(os.Getenv("WEBHOOK_URL"))
-	webhook.SendMessage(fmt.Sprintf("%s\n%s\n%s\n%s", national, la, chicago, stl))
+	message := fmt.Sprintf("%s\n%s\n%s\n%s", national, la, chicago, stl)
+	webhookURL := strings.TrimSpace(os.Getenv("WEBHOOK_URL"))
+	if webhookURL == "" {
+		fmt.Println(message)
+		return
+	}
+	webhook := discord.NewWebhook(webhookURL)
+	webhook.SendMessage(message)
 }
 
 func main() {
